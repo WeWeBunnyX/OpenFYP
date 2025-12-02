@@ -22,4 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-backend/app/__pycache__/main.cpython-313.pyc
+/backend/app/__pycache__
+
