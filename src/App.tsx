@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Dashboard from "./Dashboard";
 
 function App() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [responseMessage, setResponseMessage] = useState("");
     const [isError, setIsError] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     const handleSubmit = async () => {
         try {
@@ -25,6 +27,7 @@ function App() {
             } else {
                 setResponseMessage(data.message || "Login successful");
                 setIsError(false);
+                setIsLoggedIn(true);
             }
         } catch (err) {
             console.error(err);
@@ -32,6 +35,18 @@ function App() {
             setIsError(true);
         }
     };
+
+    const handleLogout = () => {
+        setIsLoggedIn(false);
+        setEmail("");
+        setPassword("");
+        setResponseMessage("");
+        setIsError(false);
+    };
+
+    if (isLoggedIn) {
+        return <Dashboard onLogout={handleLogout} />;
+    }
 
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
