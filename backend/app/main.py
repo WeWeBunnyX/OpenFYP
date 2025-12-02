@@ -1,23 +1,29 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+VALID_EMAIL = "test@example.com"
+VALID_PASSWORD = "password"
 
 @app.get("/")
 def read_root():
     return {"message": "Backend is working!"}
 
 @app.post("/login")
-def login(data: dict):
+def login(data: dict, response: Response):
     email = data.get("email")
     password = data.get("password")
-    # For testing, just return the values
-    return {"email": email, "password": password}
+
+    if email == VALID_EMAIL and password == VALID_PASSWORD:
+        return {"message": "Login successful"}
+    response.status_code = status.HTTP_401_UNAUTHORIZED
+    return {"message": "Invalid credentials"}
