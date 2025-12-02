@@ -52,7 +52,7 @@ function App() {
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
             <Card className="w-full max-w-md shadow-lg">
                 <CardHeader>
-                    <CardTitle className="text-xl font-bold text-center">Shadcn UI Test</CardTitle>
+                    <CardTitle className="text-xl font-bold text-center">Welcome to OpenFYP</CardTitle>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
