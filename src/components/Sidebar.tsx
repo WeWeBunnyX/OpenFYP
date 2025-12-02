@@ -54,7 +54,8 @@ export default function AppSidebar({ role = "Student" as Role }) {
                   <AvatarImage src="/favicon.ico" alt="logo" />
                   <AvatarFallback>OF</AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col">
+                {/* Hide textual labels when sidebar is collapsed into icon rail */}
+                <div className="flex flex-col group-data-[collapsible=icon]:hidden">
                   <div className="text-sm font-semibold">FYP Portal</div>
                   <div className="text-xs text-muted-foreground">{role}</div>
                 </div>
@@ -124,7 +125,7 @@ export default function AppSidebar({ role = "Student" as Role }) {
                 <Avatar>
                   <AvatarFallback>U</AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col">
+                <div className="flex flex-col group-data-[collapsible=icon]:hidden">
                   <div className="text-sm">John Doe</div>
                   <div className="text-xs text-muted-foreground">{role}</div>
                 </div>
@@ -135,7 +136,7 @@ export default function AppSidebar({ role = "Student" as Role }) {
                 </Button>
               </div>
             </div>
-            <div className="mt-2">
+            <div className="mt-2 group-data-[collapsible=icon]:hidden">
               <div className="text-xs text-muted-foreground">Quick actions</div>
               <div className="flex gap-2 mt-2">
                 <Button variant="outline" size="sm">Create</Button>
