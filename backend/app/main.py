@@ -11,8 +11,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-VALID_EMAIL = "test@example.com"
-VALID_PASSWORD = "password"
+USERS = {
+    "test@example.com": {"password": "password", "role": "Student", "name": "Test Student"},
+    "supervisor@example.com": {"password": "password", "role": "Supervisor", "name": "Dr. Supervisor"},
+    "coordinator@example.com": {"password": "password", "role": "Coordinator", "name": "Coordinator"},
+}
 
 @app.get("/")
 def read_root():
@@ -23,7 +26,12 @@ def login(data: dict, response: Response):
     email = data.get("email")
     password = data.get("password")
 
-    if email == VALID_EMAIL and password == VALID_PASSWORD:
-        return {"message": "Login successful"}
+    user = USERS.get(email)
+    if user and user.get("password") == password:
+        return {
+            "message": "Login successful",
+            "user": {"email": email, "name": user.get("name"), "role": user.get("role")},
+        }
+
     response.status_code = status.HTTP_401_UNAUTHORIZED
     return {"message": "Invalid credentials"}
