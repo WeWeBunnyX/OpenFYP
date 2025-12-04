@@ -34,8 +34,8 @@ export default function StudentForm() {
   }
 
   return (
-    <div className="p-6">
-      <Card>
+    <div className="p-6 w-full flex">
+      <Card className="w-full max-w-full">
         <CardHeader>
           <CardTitle>FYP Registration</CardTitle>
         </CardHeader>
