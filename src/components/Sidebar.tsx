@@ -44,7 +44,7 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
   ]
 
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider defaultOpen style={{ width: "auto" }}>
       <div className="flex h-full">
         <Sidebar side="left" variant="floating" collapsible="icon" className="w-64">
           <SidebarHeader>
