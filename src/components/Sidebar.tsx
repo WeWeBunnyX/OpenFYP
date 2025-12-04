@@ -25,7 +25,7 @@ import { Home, BookOpen, ClipboardList, Users, CalendarDays, Settings, FileText,
 
 type Role = "Student" | "Supervisor" | "Coordinator" | "Committee"
 
-export default function AppSidebar({ role = "Student" as Role }) {
+export default function AppSidebar({ role = "Student" as Role, onSelect, }: { role?: Role; onSelect?: (key: string) => void }) {
   const [active, setActive] = React.useState<string>("dashboard")
 
   const menu = [
@@ -77,7 +77,10 @@ export default function AppSidebar({ role = "Student" as Role }) {
                   <SidebarMenuItem key={m.key}>
                     <SidebarMenuButton
                       isActive={active === m.key}
-                      onClick={() => setActive(m.key)}
+                      onClick={() => {
+                        setActive(m.key)
+                        onSelect?.(m.key)
+                      }}
                       asChild={false}
                     >
                       <m.icon />
@@ -96,7 +99,10 @@ export default function AppSidebar({ role = "Student" as Role }) {
                   <SidebarMenuItem key={m.key}>
                     <SidebarMenuButton
                       isActive={active === m.key}
-                      onClick={() => setActive(m.key)}
+                      onClick={() => {
+                        setActive(m.key)
+                        onSelect?.(m.key)
+                      }}
                       asChild={false}
                     >
                       <m.icon />
