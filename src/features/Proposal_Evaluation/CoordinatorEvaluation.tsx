@@ -1,4 +1,3 @@
-// typescript
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,6 +8,7 @@ type Registration = {
     id: number
     owner: string
     title: string
+    abstract?: string
     status?: string
     defense?: {
         start: string
@@ -31,6 +31,8 @@ export default function CoordinatorEvaluation() {
         success?: string | null
     }>>({})
 
+    const [abstractVisible, setAbstractVisible] = React.useState<Record<number, boolean>>({})
+
     React.useEffect(() => {
         fetchRegistrations()
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,10 +41,13 @@ export default function CoordinatorEvaluation() {
     const fetchRegistrations = async () => {
         setLoading(true)
         try {
-            const resp = await fetch("/registrations", { headers: { "X-User-Email": user?.email || "" } })
+            const resp = await fetch("http://localhost:8000/registrations", { headers: { "X-User-Email": user?.email || "" } })
             if (!resp.ok) throw new Error(`Failed to load (${resp.status})`)
             const body = await resp.json()
-            setRegistrations(body.registrations || body || [])
+            const all: Registration[] = body.registrations || body || []
+            // Only show proposals that have been verified (registered)
+            const verified = all.filter(r => r.status === "registered")
+            setRegistrations(verified)
         } catch (err) {
             console.error(err)
             setRegistrations([])
@@ -56,6 +61,10 @@ export default function CoordinatorEvaluation() {
             ...s,
             [id]: { start: "", slotMinutes: 30, committeeCsv: "", error: null, success: null }
         })
+    }
+
+    const toggleAbstract = (id: number) => {
+        setAbstractVisible(s => ({ ...s, [id]: !s[id] }))
     }
 
     const updateAssign = (id: number, patch: Partial<typeof assignState[number]>) => {
@@ -86,7 +95,7 @@ export default function CoordinatorEvaluation() {
                 committee_pool,
                 registration_ids: [id]
             }
-            const resp = await fetch("/schedule", {
+            const resp = await fetch("http://localhost:8000/schedule", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -94,7 +103,7 @@ export default function CoordinatorEvaluation() {
                 },
                 body: JSON.stringify(body)
             })
-            const data = await resp.json()
+            const data = await resp.json().catch(() => null)
             if (!resp.ok) {
                 updateAssign(id, { loading: false, error: data?.message || resp.statusText })
             } else {
@@ -106,6 +115,30 @@ export default function CoordinatorEvaluation() {
             console.error(err)
             updateAssign(id, { loading: false, error: "Scheduling failed" })
         }
+    }
+
+    // Use the same verify endpoint as CoordinatorPanel and refresh the list on success
+    const verifyRegistration = async (id: number) => {
+        try {
+            const resp = await fetch(`http://localhost:8000/registrations/${id}/verify`, {
+                method: "PATCH",
+                headers: { "X-User-Email": user?.email || "" }
+            })
+            const data = await resp.json().catch(() => null)
+            if (resp.ok) {
+                // reload verified proposals
+                await fetchRegistrations()
+            } else {
+                console.warn("Verify failed", resp.status, data)
+            }
+        } catch (err) {
+            console.warn("Verify request error", err)
+        }
+    }
+
+    const truncate = (text?: string, len = 120) => {
+        if (!text) return ""
+        return text.length > len ? text.slice(0, len) + "…" : text
     }
 
     return (
@@ -120,6 +153,7 @@ export default function CoordinatorEvaluation() {
                     <tr>
                         <th className="p-2">#</th>
                         <th className="p-2">Title</th>
+                        <th className="p-2">Proposal</th>
                         <th className="p-2">Student</th>
                         <th className="p-2">Status</th>
                         <th className="p-2">Defense</th>
@@ -128,15 +162,17 @@ export default function CoordinatorEvaluation() {
                     </thead>
                     <tbody>
                     {registrations.length === 0 && (
-                        <tr><td colSpan={6} className="p-4 text-center text-sm text-muted-foreground">No proposals found</td></tr>
+                        <tr><td colSpan={7} className="p-4 text-center text-sm text-muted-foreground">No proposals found</td></tr>
                     )}
                     {registrations.map(reg => {
                         const s = assignState[reg.id]
+                        const absVisible = !!abstractVisible[reg.id]
                         return (
                             <React.Fragment key={reg.id}>
                                 <tr className="border-t">
                                     <td className="p-2 align-top">{reg.id}</td>
                                     <td className="p-2 align-top">{reg.title}</td>
+                                    <td className="p-2 align-top text-sm">{truncate(reg.abstract)}</td>
                                     <td className="p-2 align-top">{reg.owner}</td>
                                     <td className="p-2 align-top">{reg.status || "-"}</td>
                                     <td className="p-2 align-top text-sm">
@@ -150,15 +186,32 @@ export default function CoordinatorEvaluation() {
                                         )}
                                     </td>
                                     <td className="p-2 align-top">
-                                        <div className="flex flex-col gap-2">
+                                        <div className="flex gap-2">
                                             <Button onClick={() => openAssign(reg.id)} size="sm">Assign</Button>
+                                            {reg.status !== "registered" ? (
+                                                <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
+                                            ) : (
+                                                <div className="text-sm text-green-600 self-center">Verified</div>
+                                            )}
+                                            <Button variant="ghost" onClick={() => toggleAbstract(reg.id)} size="sm">
+                                                {absVisible ? "Hide" : "View"}
+                                            </Button>
                                         </div>
                                     </td>
                                 </tr>
 
+                                {absVisible && (
+                                    <tr>
+                                        <td colSpan={7} className="p-3 bg-gray-50 text-sm whitespace-pre-wrap">
+                                            <strong>Proposal abstract:</strong>
+                                            <div className="mt-1">{reg.abstract || "(no abstract provided)"}</div>
+                                        </td>
+                                    </tr>
+                                )}
+
                                 {s && (
                                     <tr>
-                                        <td colSpan={6} className="p-3 bg-gray-50">
+                                        <td colSpan={7} className="p-3 bg-gray-50">
                                             <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
                                                 <div>
                                                     <Label className="text-sm">Start</Label>
