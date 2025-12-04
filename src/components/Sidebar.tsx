@@ -152,8 +152,7 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
           </SidebarFooter>
         </Sidebar>
 
-        {/* Sidebar inset area (main content placeholder) */}
-        <div className="flex-1" />
+        {/* Sidebar no longer renders a main placeholder; parent layout (dashboard) provides the main content area. */}
       </div>
     </SidebarProvider>
   )

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Response, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -14,6 +14,7 @@ app.add_middleware(
 USERS = {
     "test@example.com": {"password": "password", "role": "Student", "name": "Test Student"},
     "supervisor@example.com": {"password": "password", "role": "Supervisor", "name": "Dr. Supervisor"},
+    "supervisor@test.com": {"password": "password", "role": "Supervisor", "name": "Supervisor Test"},
     "coordinator@example.com": {"password": "password", "role": "Coordinator", "name": "Coordinator"},
 }
 
@@ -55,7 +56,7 @@ def login(data: dict, response: Response):
 
 
 @app.post("/registrations")
-def create_registration(data: dict, response: Response, x_user_email: str = None):
+def create_registration(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
     """Student submits a registration. Expects header X-User-Email to identify user."""
     user = get_user_from_header(x_user_email)
     if not user or user.get("role") != "Student":
@@ -94,7 +95,7 @@ def create_registration(data: dict, response: Response, x_user_email: str = None
 
 
 @app.get("/registrations")
-def list_registrations(x_user_email: str = None):
+def list_registrations(x_user_email: str = Header(None, alias="X-User-Email")):
     """List registrations. If requester is supervisor, return submitted ones. If coordinator, return all. If student, return own."""
     user = get_user_from_header(x_user_email)
     if not user:
@@ -113,14 +114,14 @@ def list_registrations(x_user_email: str = None):
 
 
 @app.get("/notifications")
-def get_notifications(x_user_email: str = None):
+def get_notifications(x_user_email: str = Header(None, alias="X-User-Email")):
     if not x_user_email:
         return {"notifications": []}
     return {"notifications": NOTIFICATIONS.get(x_user_email, [])}
 
 
 @app.patch("/registrations/{reg_id}/approve")
-def approve_registration(reg_id: int, response: Response, x_user_email: str = None):
+def approve_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
     user = get_user_from_header(x_user_email)
     if not user or user.get("role") != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -142,7 +143,7 @@ def approve_registration(reg_id: int, response: Response, x_user_email: str = No
 
 
 @app.patch("/registrations/{reg_id}/reject")
-def reject_registration(reg_id: int, response: Response, x_user_email: str = None):
+def reject_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
     user = get_user_from_header(x_user_email)
     if not user or user.get("role") != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -161,7 +162,7 @@ def reject_registration(reg_id: int, response: Response, x_user_email: str = Non
 
 
 @app.patch("/registrations/{reg_id}/verify")
-def verify_registration(reg_id: int, response: Response, x_user_email: str = None):
+def verify_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
     user = get_user_from_header(x_user_email)
     if not user or user.get("role") != "Coordinator":
         response.status_code = status.HTTP_403_FORBIDDEN
