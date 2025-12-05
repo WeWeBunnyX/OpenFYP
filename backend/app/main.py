@@ -12,7 +12,6 @@ export DATABASE_URL='sqlite:///./backend/dev.db'-->  fallback to sqlite localdb 
 from typing import List, Optional
 import os
 from datetime import datetime
-
 from fastapi import FastAPI, Response, status, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Field, create_engine, Session, select
@@ -231,3 +230,68 @@ def verify_registration(reg_id: int, response: Response, x_user_email: str = Hea
     session.refresh(reg)
     return {"message": "Verified", "registration": reg.dict()}
 
+
+@app.post("/schedule")
+def create_schedule(
+        data: dict,
+        response: Response,
+        x_user_email: str = Header(None, alias="X-User-Email"),
+        session: Session = Depends(get_session)
+):
+    """
+    Schedule defense for registrations.
+    Payload: {
+      "start": "2024-01-01T10:00:00Z",
+      "end": "2024-01-01T11:00:00Z",
+      "slot_minutes": 30,
+      "committee_pool": ["a@example.com", "b@example.com"],
+      "registration_ids": [1, 2]
+    }
+    """
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can schedule"}
+
+    start = data.get("start")
+    committee_pool = data.get("committee_pool") or []
+    reg_ids = data.get("registration_ids") or []
+
+    if not start or not committee_pool or not reg_ids:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Missing start, committee_pool or registration_ids"}
+
+    # Process each registration
+    for rid in reg_ids:
+        reg = session.get(Registration, rid)
+        if not reg:
+            response.status_code = status.HTTP_404_NOT_FOUND
+            return {"message": f"Registration {rid} not found"}
+
+        # Add history entry
+        reg.history = reg.history or []
+        reg.history.append({
+            "actor": x_user_email,
+            "action": "scheduled",
+            "note": f"Defense scheduled for {start}",
+            "at": datetime.utcnow().isoformat()
+        })
+        session.add(reg)
+
+        # Notify student
+        push_notification_db(
+            session,
+            reg.owner,
+            f"Your defense for '{reg.title}' scheduled on {start} — Committee: {', '.join(committee_pool)}"
+        )
+
+        # Notify committee members
+        for email in committee_pool:
+            push_notification_db(
+                session,
+                email,
+                f"You are assigned to defense for '{reg.title}' on {start}"
+            )
+
+    session.commit()
+    return {"message": "Scheduled successfully"}
