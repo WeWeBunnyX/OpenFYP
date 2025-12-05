@@ -36,6 +36,12 @@ export default function StudentForm() {
   const [fileData, setFileData] = React.useState<string | null>(null) // base64 data
   const [fileError, setFileError] = React.useState<string | null>(null)
   const [submittedRegistration, setSubmittedRegistration] = React.useState<any | null>(null)
+  const [registrations, setRegistrations] = React.useState<any[]>([])
+  const [selectedRegistrationId, setSelectedRegistrationId] = React.useState<number | null>(null)
+  const [loading, setLoading] = React.useState(false)
+  const [attachments, setAttachments] = React.useState<any[]>([])
+  const [attachmentsLoading, setAttachmentsLoading] = React.useState(false)
+  const [downloadLoadingId, setDownloadLoadingId] = React.useState<number | null>(null)
   const [editOpen, setEditOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState("")
@@ -43,7 +49,70 @@ export default function StudentForm() {
   const [editFileName, setEditFileName] = React.useState<string | null>(null)
   const [editFileData, setEditFileData] = React.useState<string | null>(null)
 
+  React.useEffect(() => {
+    // load existing registration for student on mount
+    const load = async () => {
+      if (!user?.email) return
+      await fetchRegistrations()
+    }
+    load()
+  }, [user])
+
+  const fetchRegistrations = async () => {
+    if (!user?.email) return
+    setLoading(true)
+    try {
+      const res = await fetch("http://localhost:8000/registrations", {
+        headers: { "X-User-Email": user.email },
+      })
+      const json = await res.json()
+      if (res.ok && Array.isArray(json.registrations)) {
+        setRegistrations(json.registrations)
+        if (json.registrations.length > 0) {
+          // default to first
+          setSelectedRegistrationId(json.registrations[0].id)
+          setSubmittedRegistration(json.registrations[0])
+        } else {
+          setSelectedRegistrationId(null)
+          setSubmittedRegistration(null)
+        }
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAttachments = async (regId: number | null) => {
+    if (!regId || !user?.email) {
+      setAttachments([])
+      return
+    }
+    setAttachmentsLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/registrations/${regId}/attachments`, {
+        headers: { "X-User-Email": user.email },
+      })
+      const json = await res.json()
+      if (res.ok && Array.isArray(json.attachments)) {
+        setAttachments(json.attachments)
+      } else {
+        setAttachments([])
+      }
+    } catch (e) {
+      setAttachments([])
+    } finally {
+      setAttachmentsLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    fetchAttachments(selectedRegistrationId)
+  }, [selectedRegistrationId, user])
+
   const submit = async () => {
+    setLoading(true)
     try {
       const payload: any = { title, supervisor, abstract }
       if (fileName && fileData) {
@@ -61,14 +130,19 @@ export default function StudentForm() {
       const data = await res.json()
       if (res.ok) {
         setMessage("Submitted successfully")
-        // store registration for post-submit actions
-        setSubmittedRegistration(data.registration)
+        // refresh list and select new registration
+        await fetchRegistrations()
+        if (data.registration) {
+          setSubmittedRegistration(data.registration)
+          setSelectedRegistrationId(data.registration.id)
+        }
       } else {
         setMessage(data.message || "Submission failed")
       }
     } catch (err) {
       setMessage("Error connecting to server")
     }
+    setLoading(false)
   }
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,6 +252,7 @@ export default function StudentForm() {
         setMessage("Registration deleted")
         setSubmittedRegistration(null)
         setDeleteOpen(false)
+        await fetchRegistrations()
       } else {
         const data = await res.json()
         setMessage(data.message || "Delete failed")
@@ -198,6 +273,7 @@ export default function StudentForm() {
 
   const handleSaveEdit = async () => {
     if (!submittedRegistration) return
+    setLoading(true)
     try {
       const payload: any = { title: editTitle, abstract: editAbstract }
       if (editFileName && editFileData) {
@@ -213,11 +289,40 @@ export default function StudentForm() {
         setMessage("Registration updated")
         setSubmittedRegistration(data.registration)
         setEditOpen(false)
+        await fetchRegistrations()
       } else {
         setMessage(data.message || "Update failed")
       }
     } catch (err) {
       setMessage("Error connecting to server")
+    }
+    setLoading(false)
+  }
+
+  const downloadAttachment = async (attId: number, filename?: string) => {
+    if (!user?.email) return
+    setDownloadLoadingId(attId)
+    try {
+      const res = await fetch(`http://localhost:8000/attachments/${attId}/download`, {
+        headers: { "X-User-Email": user.email },
+      })
+      if (!res.ok) {
+        setMessage('Failed to download')
+        return
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename || 'attachment'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      setMessage('Error downloading file')
+    } finally {
+      setDownloadLoadingId(null)
     }
   }
 
@@ -227,73 +332,134 @@ export default function StudentForm() {
         <CardHeader>
           <CardTitle>FYP Registration</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <Label>Project Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div>
-              <Label>Supervisor Email</Label>
-              <Input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} />
-            </div>
-            <div>
-              <Label>Abstract</Label>
-              <textarea className="w-full rounded-md p-2 border" value={abstract} onChange={(e) => setAbstract(e.target.value)} />
-            </div>
-            <div>
-              <Label>Attach file (optional)</Label>
-              <div className="mt-2 flex items-center gap-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
-                  onChange={onFileChange}
-                  className="hidden"
-                />
-                <Button size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
-                  Browse file
-                </Button>
-                <div className="text-sm">{fileName ? `Selected: ${fileName}` : 'No file chosen'}</div>
+        <div className="flex flex-col md:flex-row md:gap-6 items-start">
+          <div className="md:w-1/4">
+            <div className="border rounded-md p-4 h-full">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-medium">Your Registrations</div>
+                <div className="ml-2">
+                  <Button size="sm" className="shrink-0" variant="outline" onClick={() => { setSelectedRegistrationId(null); setSubmittedRegistration(null); }}>New</Button>
+                </div>
               </div>
-              {fileError && <div className="text-sm text-red-600 mt-1">{fileError}</div>}
+              {loading ? (
+                <div className="text-sm">Loading...</div>
+              ) : registrations.length === 0 ? (
+                <div className="text-sm">No registrations</div>
+              ) : (
+                <ul className="space-y-2">
+                  {registrations.map((r) => (
+                    <li key={r.id}>
+                      <button
+                        className={`w-full text-left p-2 rounded ${selectedRegistrationId === r.id ? 'bg-accent' : 'hover:bg-muted'}`}
+                        onClick={() => { setSelectedRegistrationId(r.id); setSubmittedRegistration(r); }}
+                      >
+                        <div className="font-medium">{r.title}</div>
+                        <div className="text-xs text-muted-foreground">{r.supervisor}</div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            {message && <div className="text-sm text-muted-foreground">{message}</div>}
           </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={submit}>Submit Registration</Button>
-        </CardFooter>
-        {submittedRegistration && (
-          <div className="p-4 border-t">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">Submitted: {submittedRegistration.title}</div>
-                <div className="text-sm text-muted-foreground">Supervisor: {submittedRegistration.supervisor}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={openEditDialog}>Edit</Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button size="sm" variant="destructive">Delete</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will permanently delete your registration.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="flex items-center justify-end gap-2 mt-4">
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+          <div className="md:w-3/4">
+            <div className="border rounded-md p-6 min-h-[220px]">
+              {!submittedRegistration ? (
+                <>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Project Title</Label>
+                        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Supervisor Email</Label>
+                        <Input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Abstract</Label>
+                        <textarea className="w-full rounded-md p-2 border" value={abstract} onChange={(e) => setAbstract(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label>Attach file (optional)</Label>
+                        <div className="mt-2 flex items-center gap-3">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
+                            onChange={onFileChange}
+                            className="hidden"
+                          />
+                          <Button size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
+                            Browse file
+                          </Button>
+                          <div className="text-sm">{fileName ? `Selected: ${fileName}` : 'No file chosen'}</div>
+                        </div>
+                        {fileError && <div className="text-sm text-red-600 mt-1">{fileError}</div>}
+                      </div>
+                      {message && <div className="text-sm text-muted-foreground">{message}</div>}
                     </div>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button onClick={submit}>Submit Registration</Button>
+                  </CardFooter>
+                </>
+              ) : (
+                <>
+                  <CardContent>
+                    <div className="p-4">
+                      <div className="font-medium">Submitted: {submittedRegistration.title}</div>
+                      <div className="text-sm text-muted-foreground">Supervisor: {submittedRegistration.supervisor}</div>
+                      {submittedRegistration.abstract && <div className="mt-2">{submittedRegistration.abstract}</div>}
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <div className="w-full flex items-center justify-between gap-2">
+                      <div>
+                        {attachmentsLoading ? (
+                          <div className="text-sm">Loading attachments...</div>
+                        ) : attachments.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No attachments</div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {attachments.map((a) => (
+                              <div key={a.id} className="flex items-center gap-2">
+                                <div className="text-sm">{a.filename}</div>
+                                <Button size="sm" onClick={() => downloadAttachment(a.id, a.filename)} disabled={downloadLoadingId === a.id}>
+                                  {downloadLoadingId === a.id ? 'Downloading...' : 'View'}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={openEditDialog}>Edit</Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive">Delete</Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete your registration.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="flex items-center justify-end gap-2 mt-4">
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                            </div>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </CardFooter>
+                </>
+              )}
             </div>
           </div>
-        )}
+        </div>
         {/* Edit Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent>
