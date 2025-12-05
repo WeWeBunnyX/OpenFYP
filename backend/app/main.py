@@ -1,5 +1,26 @@
-from fastapi import FastAPI, Response, status, Header
+"""
+Database backend using SQLModel. Replaces in memory demo stores with real tables.
+Tables are created on startup if they do not exist. Use DATABASE_URL env var to point to Postgres
+or SQLite for quick testing.
+
+export DATABASE_URL='postgresql+psycopg2://openfyp:password@localhost:5432/fypdb'--> using as default (overriden via docker-compose.yml)
+
+export DATABASE_URL='sqlite:///./backend/dev.db'-->  fallback to sqlite localdb only if above not set
+
+"""
+
+from typing import List, Optional
+import os
+from datetime import datetime
+
+from fastapi import FastAPI, Response, status, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import SQLModel, Field, create_engine, Session, select
+from sqlalchemy import Column, JSON
+
+#Overriden by docker-compose.yml to point to Openfyp container (Backend + Db)->(openfyp-backend + postgres:15)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./backend/dev.db")
+print("Using DATABASE_URL:", DATABASE_URL)
 
 app = FastAPI()
 
@@ -11,170 +32,202 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-USERS = {
-    "test@example.com": {"password": "password", "role": "Student", "name": "Test Student"},
-    "supervisor@example.com": {"password": "password", "role": "Supervisor", "name": "Dr. Supervisor"},
-    "supervisor@test.com": {"password": "password", "role": "Supervisor", "name": "Supervisor Test"},
-    "coordinator@example.com": {"password": "password", "role": "Coordinator", "name": "Coordinator"},
-}
 
-# Simple in-memory registration store for demo purposes.
-REGISTRATIONS = []
-REG_ID_SEQ = 1
+engine = create_engine(DATABASE_URL, echo=False)
 
-def get_user_from_header(email_header: str):
-    if not email_header:
-        return None
-    return USERS.get(email_header)
 
-# Simple in-memory notifications: map user email -> list of notifications
-NOTIFICATIONS = {}
+class User(SQLModel, table=True):
+    email: str = Field(primary_key=True)
+    password: str
+    role: str
+    name: Optional[str] = None
 
-def push_notification(email: str, message: str):
+
+class Registration(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner: str
+    title: str
+    supervisor: str
+    abstract: Optional[str] = None
+    status: str = Field(default="pending_approval")
+    history: List[dict] = Field(sa_column=Column(JSON), default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Notification(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_email: str
+    message: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    read: bool = Field(default=False)
+
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
+    # seed demo users if none exist
+    with Session(engine) as session:
+        existing = session.exec(select(User)).first()
+        if not existing:
+            demo = [
+                User(email="test@example.com", password="password", role="Student", name="Test Student"),
+                User(email="supervisor@example.com", password="password", role="Supervisor", name="Dr. Supervisor"),
+                User(email="supervisor@test.com", password="password", role="Supervisor", name="Supervisor Test"),
+                User(email="coordinator@example.com", password="password", role="Coordinator", name="Coordinator"),
+            ]
+            session.add_all(demo)
+            session.commit()
+
+
+def push_notification_db(session: Session, email: str, message: str):
     if not email:
         return
-    NOTIFICATIONS.setdefault(email, []).append({"message": message})
+    note = Notification(user_email=email, message=message)
+    session.add(note)
+
 
 @app.get("/")
 def read_root():
     return {"message": "Backend is working!"}
 
+
 @app.post("/login")
-def login(data: dict, response: Response):
+def login(data: dict, response: Response, session: Session = Depends(get_session)):
     email = data.get("email")
     password = data.get("password")
-
-    user = USERS.get(email)
-    if user and user.get("password") == password:
-        return {
-            "message": "Login successful",
-            "user": {"email": email, "name": user.get("name"), "role": user.get("role")},
-        }
+    user = session.get(User, email)
+    if user and user.password == password:
+        return {"message": "Login successful", "user": {"email": user.email, "name": user.name, "role": user.role}}
 
     response.status_code = status.HTTP_401_UNAUTHORIZED
     return {"message": "Invalid credentials"}
 
 
 @app.post("/registrations")
-def create_registration(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
-    """Student submits a registration. Expects header X-User-Email to identify user."""
-    user = get_user_from_header(x_user_email)
-    if not user or user.get("role") != "Student":
+def create_registration(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Student":
         response.status_code = status.HTTP_403_FORBIDDEN
         return {"message": "Only students can submit registrations"}
 
-    # validate supervisor exists
     supervisor_email = data.get("supervisor")
-    if supervisor_email not in USERS:
+    supervisor = session.get(User, supervisor_email)
+    if not supervisor or supervisor.role != "Supervisor":
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {"message": "Supervisor not found"}
 
-    global REG_ID_SEQ
-    reg = {
-        "id": REG_ID_SEQ,
-        "owner": x_user_email,
-        "title": data.get("title"),
-        "supervisor": supervisor_email,
-        "abstract": data.get("abstract"),
-        # initial status requires supervisor approval
-        "status": "pending_approval",
-        "history": [],
-    }
-    REG_ID_SEQ += 1
-    REGISTRATIONS.append(reg)
-    # log history
-    reg["history"].append({"actor": x_user_email, "action": "submitted", "note": "Student submitted registration"})
+    reg = Registration(owner=x_user_email, title=data.get("title"), supervisor=supervisor_email, abstract=data.get("abstract"), history=[{"actor": x_user_email, "action": "submitted", "note": "Student submitted registration", "at": datetime.utcnow().isoformat()}])
+    session.add(reg)
+    session.commit()
+    session.refresh(reg)
 
-    # push notification to supervisor and coordinator
-    push_notification(supervisor_email, f"New registration submitted by {x_user_email}: {reg['title']}")
-    # notify coordinators (all users with Coordinator role)
-    for email, u in USERS.items():
-        if u.get("role") == "Coordinator":
-            push_notification(email, f"Registration submitted by {x_user_email}: {reg['title']}")
-    return {"message": "Submitted", "registration": reg}
+    push_notification_db(session, supervisor_email, f"New registration submitted by {x_user_email}: {reg.title}")
+    # notify coordinators
+    coords = session.exec(select(User).where(User.role == "Coordinator")).all()
+    for c in coords:
+        push_notification_db(session, c.email, f"Registration submitted by {x_user_email}: {reg.title}")
+
+    session.commit()
+    return {"message": "Submitted", "registration": reg.dict()}
 
 
 @app.get("/registrations")
-def list_registrations(x_user_email: str = Header(None, alias="X-User-Email")):
-    """List registrations. If requester is supervisor, return submitted ones. If coordinator, return all. If student, return own."""
-    user = get_user_from_header(x_user_email)
+def list_registrations(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
     if not user:
         return {"registrations": []}
-
-    role = user.get("role")
+    role = user.role
     if role == "Supervisor":
-        # supervisors see pending_approval items assigned to them
-        return {"registrations": [r for r in REGISTRATIONS if r.get("status") == "pending_approval" and r.get("supervisor") == x_user_email]}
+        regs = session.exec(select(Registration).where(Registration.status == "pending_approval", Registration.supervisor == x_user_email)).all()
+        return {"registrations": [r.dict() for r in regs]}
     if role == "Coordinator":
-        return {"registrations": REGISTRATIONS}
+        regs = session.exec(select(Registration)).all()
+        return {"registrations": [r.dict() for r in regs]}
     if role == "Student":
-        return {"registrations": [r for r in REGISTRATIONS if r.get("owner") == x_user_email]}
-
+        regs = session.exec(select(Registration).where(Registration.owner == x_user_email)).all()
+        return {"registrations": [r.dict() for r in regs]}
     return {"registrations": []}
 
 
 @app.get("/notifications")
-def get_notifications(x_user_email: str = Header(None, alias="X-User-Email")):
+def get_notifications(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     if not x_user_email:
         return {"notifications": []}
-    return {"notifications": NOTIFICATIONS.get(x_user_email, [])}
+    notes = session.exec(select(Notification).where(Notification.user_email == x_user_email)).all()
+    return {"notifications": [{"id": n.id, "message": n.message, "created_at": n.created_at.isoformat(), "read": n.read} for n in notes]}
 
 
 @app.patch("/registrations/{reg_id}/approve")
-def approve_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
-    user = get_user_from_header(x_user_email)
-    if not user or user.get("role") != "Supervisor":
+def approve_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
         return {"message": "Only supervisors can approve"}
 
-    for r in REGISTRATIONS:
-        if r["id"] == reg_id:
-            r["status"] = "approved"
-            r.setdefault("history", []).append({"actor": x_user_email, "action": "approved", "note": "Supervisor approved"})
-            # notify student and coordinator
-            push_notification(r.get("owner"), f"Your registration '{r.get('title')}' was approved by {x_user_email}")
-            for email, u in USERS.items():
-                if u.get("role") == "Coordinator":
-                    push_notification(email, f"Registration '{r.get('title')}' approved by supervisor {x_user_email}")
-            return {"message": "Approved", "registration": r}
+    reg = session.get(Registration, reg_id)
+    if not reg:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
 
-    response.status_code = status.HTTP_404_NOT_FOUND
-    return {"message": "Not found"}
+    reg.status = "approved"
+    reg.history = reg.history or []
+    reg.history.append({"actor": x_user_email, "action": "approved", "note": "Supervisor approved", "at": datetime.utcnow().isoformat()})
+    session.add(reg)
+    push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was approved by {x_user_email}")
+    coords = session.exec(select(User).where(User.role == "Coordinator")).all()
+    for c in coords:
+        push_notification_db(session, c.email, f"Registration '{reg.title}' approved by supervisor {x_user_email}")
+
+    session.commit()
+    session.refresh(reg)
+    return {"message": "Approved", "registration": reg.dict()}
 
 
 @app.patch("/registrations/{reg_id}/reject")
-def reject_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
-    user = get_user_from_header(x_user_email)
-    if not user or user.get("role") != "Supervisor":
+def reject_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
         return {"message": "Only supervisors can reject"}
 
-    for r in REGISTRATIONS:
-        if r["id"] == reg_id:
-            r["status"] = "rejected"
-            r.setdefault("history", []).append({"actor": x_user_email, "action": "rejected", "note": "Supervisor rejected"})
-            # notify student
-            push_notification(r.get("owner"), f"Your registration '{r.get('title')}' was rejected by {x_user_email}")
-            return {"message": "Rejected", "registration": r}
+    reg = session.get(Registration, reg_id)
+    if not reg:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
 
-    response.status_code = status.HTTP_404_NOT_FOUND
-    return {"message": "Not found"}
+    reg.status = "rejected"
+    reg.history = reg.history or []
+    reg.history.append({"actor": x_user_email, "action": "rejected", "note": "Supervisor rejected", "at": datetime.utcnow().isoformat()})
+    session.add(reg)
+    push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was rejected by {x_user_email}")
+    session.commit()
+    session.refresh(reg)
+    return {"message": "Rejected", "registration": reg.dict()}
 
 
 @app.patch("/registrations/{reg_id}/verify")
-def verify_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email")):
-    user = get_user_from_header(x_user_email)
-    if not user or user.get("role") != "Coordinator":
+def verify_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
         response.status_code = status.HTTP_403_FORBIDDEN
         return {"message": "Only coordinators can verify"}
 
-    for r in REGISTRATIONS:
-        if r["id"] == reg_id:
-            r["status"] = "registered"
-            r.setdefault("history", []).append({"actor": x_user_email, "action": "verified", "note": "Coordinator verified (registered)"})
-            # notify student
-            push_notification(r.get("owner"), f"Your registration '{r.get('title')}' was verified by coordinator {x_user_email}")
-            return {"message": "Verified", "registration": r}
+    reg = session.get(Registration, reg_id)
+    if not reg:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
 
-    response.status_code = status.HTTP_404_NOT_FOUND
-    return {"message": "Not found"}
+    reg.status = "registered"
+    reg.history = reg.history or []
+    reg.history.append({"actor": x_user_email, "action": "verified", "note": "Coordinator verified (registered)", "at": datetime.utcnow().isoformat()})
+    session.add(reg)
+    push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was verified by coordinator {x_user_email}")
+    session.commit()
+    session.refresh(reg)
+    return {"message": "Verified", "registration": reg.dict()}
+
