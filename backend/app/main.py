@@ -17,7 +17,7 @@ import mimetypes
 import os
 from datetime import datetime
 
-from fastapi import FastAPI, Response, status, Header, Depends
+from fastapi import FastAPI, Response, status, Header, Depends, Body
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Field, create_engine, Session, select
@@ -54,6 +54,7 @@ class Registration(SQLModel, table=True):
     title: str
     supervisor: str
     abstract: Optional[str] = None
+    remarks: Optional[str] = None
     status: str = Field(default="pending_approval")
     history: List[dict] = Field(sa_column=Column(JSON), default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -214,7 +215,8 @@ def list_registrations(x_user_email: str = Header(None, alias="X-User-Email"), s
         return {"registrations": []}
     role = user.role
     if role == "Supervisor":
-        regs = session.exec(select(Registration).where(Registration.status == "pending_approval", Registration.supervisor == x_user_email)).all()
+        # supervisors should see all registrations assigned to them (not only pending)
+        regs = session.exec(select(Registration).where(Registration.supervisor == x_user_email)).all()
         return {"registrations": [r.dict() for r in regs]}
     if role == "Coordinator":
         regs = session.exec(select(Registration)).all()
@@ -280,7 +282,7 @@ def download_attachment(att_id: int, x_user_email: str = Header(None, alias="X-U
 
 
 @app.patch("/registrations/{reg_id}/approve")
-def approve_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+def approve_registration(reg_id: int, data: dict = Body(None), response: Response = None, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     user = session.get(User, x_user_email)
     if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -291,9 +293,19 @@ def approve_registration(reg_id: int, response: Response, x_user_email: str = He
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
+    # optional remarks provided by supervisor
+    remarks = None
+    if isinstance(data, dict):
+        remarks = data.get("remarks")
+
     reg.status = "approved"
+    if remarks:
+        reg.remarks = remarks
     reg.history = reg.history or []
-    reg.history.append({"actor": x_user_email, "action": "approved", "note": "Supervisor approved", "at": datetime.utcnow().isoformat()})
+    note = "Supervisor approved"
+    if remarks:
+        note = f"{note}: {remarks}"
+    reg.history.append({"actor": x_user_email, "action": "approved", "note": note, "at": datetime.utcnow().isoformat()})
     session.add(reg)
     push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was approved by {x_user_email}")
     coords = session.exec(select(User).where(User.role == "Coordinator")).all()
@@ -306,7 +318,7 @@ def approve_registration(reg_id: int, response: Response, x_user_email: str = He
 
 
 @app.patch("/registrations/{reg_id}/reject")
-def reject_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+def reject_registration(reg_id: int, data: dict = Body(None), response: Response = None, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     user = session.get(User, x_user_email)
     if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -317,9 +329,19 @@ def reject_registration(reg_id: int, response: Response, x_user_email: str = Hea
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
+    # optional remarks provided by supervisor
+    remarks = None
+    if isinstance(data, dict):
+        remarks = data.get("remarks")
+
     reg.status = "rejected"
+    if remarks:
+        reg.remarks = remarks
     reg.history = reg.history or []
-    reg.history.append({"actor": x_user_email, "action": "rejected", "note": "Supervisor rejected", "at": datetime.utcnow().isoformat()})
+    note = "Supervisor rejected"
+    if remarks:
+        note = f"{note}: {remarks}"
+    reg.history.append({"actor": x_user_email, "action": "rejected", "note": note, "at": datetime.utcnow().isoformat()})
     session.add(reg)
     push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was rejected by {x_user_email}")
     session.commit()
