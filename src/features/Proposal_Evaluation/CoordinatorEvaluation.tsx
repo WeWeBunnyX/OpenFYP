@@ -45,8 +45,8 @@ export default function CoordinatorEvaluation() {
             if (!resp.ok) throw new Error(`Failed to load (${resp.status})`)
             const body = await resp.json()
             const all: Registration[] = body.registrations || body || []
-            // Only show proposals that have been verified (registered)
-            const verified = all.filter(r => r.status === "registered")
+            // Show proposals that are verified (registered) or already scheduled
+            const verified = all.filter(r => r.status === "registered" || r.status === "scheduled" || (r.defense && r.defense.start))
             setRegistrations(verified)
         } catch (err) {
             console.error(err)
@@ -174,7 +174,15 @@ export default function CoordinatorEvaluation() {
                                     <td className="p-2 align-top">{reg.title}</td>
                                     <td className="p-2 align-top text-sm">{truncate(reg.abstract)}</td>
                                     <td className="p-2 align-top">{reg.owner}</td>
-                                    <td className="p-2 align-top">{reg.status || "-"}</td>
+                                    <td className="p-2 align-top">
+                                        {reg.defense ? (
+                                            <div className="text-sm text-green-600">Assigned</div>
+                                        ) : reg.status === "registered" || reg.status === "scheduled" ? (
+                                            <div className="text-sm text-green-600">{reg.status === "registered" ? "Verified" : "Scheduled"}</div>
+                                        ) : (
+                                            reg.status || "-"
+                                        )}
+                                    </td>
                                     <td className="p-2 align-top text-sm">
                                         {reg.defense ? (
                                             <div>
