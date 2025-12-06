@@ -412,6 +412,10 @@ def verify_registration(reg_id: int, response: Response, x_user_email: str = Hea
     if not reg:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
+    # Only allow verification if the supervisor has approved the registration
+    if reg.status != "approved":
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Only registrations approved by a supervisor can be verified"}
 
     reg.status = "registered"
     reg.history = reg.history or []
