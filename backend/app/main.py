@@ -1,3 +1,5 @@
+# python
+# File: `backend/app/main.py`
 """
 Database backend using SQLModel. Replaces in memory demo stores with real tables.
 Tables are created on startup if they do not exist. Use DATABASE_URL env var to point to Postgres
@@ -15,7 +17,7 @@ import uuid
 from pathlib import Path
 import mimetypes
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Response, status, Header, Depends, Body
 from fastapi.responses import FileResponse
@@ -450,36 +452,52 @@ def create_schedule(data: dict, response: Response, x_user_email: str = Header(N
         return {"message": "Missing start time or registration_ids"}
 
     start_dt = _parse_iso_datetime(start_iso)
-    end_dt = _parse_iso_datetime(end_iso) or start_dt
+    end_dt = _parse_iso_datetime(end_iso) if end_iso else None
     if not start_dt:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return {"message": "Invalid start datetime"}
 
+    # If slot_minutes provided, compute successive slots; otherwise use provided end_dt for all
     created = []
     updated_regs = []
+    current_start = start_dt
+    # normalize slot_minutes to int when possible
+    try:
+        slot_mins = int(slot_minutes) if slot_minutes is not None else None
+    except Exception:
+        slot_mins = None
+
     for rid in registration_ids:
         try:
             reg = session.get(Registration, rid)
             if not reg:
                 continue
 
+            # determine start and end for this registration
+            sched_start = current_start
+            if slot_mins and slot_mins > 0:
+                sched_end = sched_start + timedelta(minutes=slot_mins)
+            else:
+                # fallback: use provided end_dt or same as start
+                sched_end = end_dt or sched_start
+
             sched = Scheduling(
                 registration_id=reg.id,
                 title=reg.title,
                 proposal=reg.abstract,
                 student_email=reg.owner,
-                start=start_dt,
-                end=end_dt,
-                slot_minutes=slot_minutes,
+                start=sched_start,
+                end=sched_end,
+                slot_minutes=slot_mins,
                 committee=committee_pool,
             )
             session.add(sched)
 
             # update registration.defense so UI can show it
-            reg.defense = {"start": start_dt.isoformat(), "end": (end_dt.isoformat() if end_dt else None), "committee": committee_pool}
+            reg.defense = {"start": sched_start.isoformat(), "end": (sched_end.isoformat() if sched_end else None), "committee": committee_pool}
             session.add(reg)
 
-            # mark registration as scheduled so coordinators still see it and UI can show assigned badge
+            # mark registration as scheduled
             try:
                 reg.status = "scheduled"
             except Exception:
@@ -490,10 +508,14 @@ def create_schedule(data: dict, response: Response, x_user_email: str = Header(N
             reg.history.append({"actor": x_user_email, "action": "scheduled", "note": f"Scheduled defense with committee: {', '.join(committee_pool)}", "at": datetime.utcnow().isoformat()})
 
             # notifications
-            push_notification_db(session, reg.owner, f"Your defense for '{reg.title}' has been scheduled at {start_dt.isoformat()}")
+            push_notification_db(session, reg.owner, f"Your defense for '{reg.title}' has been scheduled at {sched_start.isoformat()}")
 
             created.append(sched)
             updated_regs.append(reg)
+
+            # advance current_start only when slot length is provided
+            if slot_mins and slot_mins > 0:
+                current_start = sched_end
         except Exception as e:
             # continue on individual failures
             print("Scheduling error for reg", rid, e)
@@ -502,6 +524,52 @@ def create_schedule(data: dict, response: Response, x_user_email: str = Header(N
 
     return {"message": "Scheduled", "scheduling": [c.dict() for c in created], "updated_registrations": [r.dict() for r in updated_regs]}
 
+
+# New: list schedules endpoint
+@app.get("/schedules")
+def list_schedules(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """
+    Returns scheduling entries. Access:
+      - Coordinator: all schedules
+      - Student: their own schedules (by student_email)
+      - Supervisor: schedules for registrations supervised by them
+    """
+    user = session.get(User, x_user_email)
+    if not user:
+        return {"schedules": []}
+
+    try:
+        if user.role == "Coordinator":
+            rows = session.exec(select(Scheduling)).all()
+        elif user.role == "Student":
+            rows = session.exec(select(Scheduling).where(Scheduling.student_email == x_user_email)).all()
+        elif user.role == "Supervisor":
+            # join Scheduling -> Registration to filter by Registration.supervisor
+            rows = session.exec(
+                select(Scheduling).join(Registration, Scheduling.registration_id == Registration.id).where(Registration.supervisor == x_user_email)
+            ).all()
+        else:
+            rows = []
+    except Exception as e:
+        print("Error listing schedules:", e)
+        rows = []
+
+    def map_row(s: Scheduling):
+        return {
+            "id": s.id,
+            "registration_id": s.registration_id,
+            "title": s.title,
+            "proposal": s.proposal,
+            "student_email": s.student_email,
+            "status": s.status,
+            "start": s.start.isoformat() if s.start else None,
+            "end": s.end.isoformat() if s.end else None,
+            "slot_minutes": s.slot_minutes,
+            "committee": s.committee,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+
+    return {"schedules": [map_row(s) for s in rows]}
 
 
 @app.delete("/registrations/{reg_id}")
