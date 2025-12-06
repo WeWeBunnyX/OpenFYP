@@ -35,13 +35,6 @@ export default function CoordinatorEvaluation() {
     const [attachmentsMap, setAttachmentsMap] = React.useState<Record<number, any[]>>({})
     const [attachmentsLoadingMap, setAttachmentsLoadingMap] = React.useState<Record<number, boolean>>({})
 
-    // mock committee presets for quick filling
-    const MOCK_COMMITTEES: string[] = [
-        "dan@example.com, bob@example.com, carol@example.com",
-        "dave@example.com, eve@example.com, frank@example.com",
-        "member1@example.com, member2@example.com"
-    ]
-
     React.useEffect(() => {
         fetchRegistrations()
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,23 +301,6 @@ export default function CoordinatorEvaluation() {
                                                 <div className="md:col-span-2">
                                                     <Label className="text-sm">Committee emails (comma separated)</Label>
                                                     <Input value={s.committeeCsv} onChange={(e) => updateAssign(reg.id, { committeeCsv: e.target.value })} placeholder="member1@example.com, member2@example.com" />
-                                                    <div className="mt-2 flex items-center gap-2">
-                                                        <Label className="text-sm">Presets</Label>
-                                                        <select
-                                                            className="border rounded px-2 py-1 text-sm"
-                                                            onChange={(e) => {
-                                                                const v = e.target.value
-                                                                if (v) updateAssign(reg.id, { committeeCsv: v })
-                                                            }}
-                                                            defaultValue=""
-                                                        >
-                                                            <option value="">Choose preset…</option>
-                                                            {MOCK_COMMITTEES.map((c, i) => (
-                                                                <option key={i} value={c}>Preset {i + 1}</option>
-                                                            ))}
-                                                        </select>
-                                                        <Button variant="ghost" size="sm" onClick={() => updateAssign(reg.id, { committeeCsv: "" })}>Clear</Button>
-                                                    </div>
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Button onClick={() => handleAssign(reg.id)} disabled={s.loading}>
