@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 
 type Registration = {
     id: number
@@ -30,7 +31,15 @@ export default function CoordinatorEvaluation() {
         error?: string | null
         success?: string | null
     }>>({})
-
+    const [interimAssignState, setInterimAssignState] = React.useState<Record<number, {
+        start: string
+        end?: string
+        slotMinutes: number
+        evaluatorsCsv: string
+        loading?: boolean
+        error?: string | null
+        success?: string | null
+    }>>({})
     const [abstractVisible, setAbstractVisible] = React.useState<Record<number, boolean>>({})
     const [attachmentsMap, setAttachmentsMap] = React.useState<Record<number, any[]>>({})
     const [attachmentsLoadingMap, setAttachmentsLoadingMap] = React.useState<Record<number, boolean>>({})
@@ -63,6 +72,10 @@ export default function CoordinatorEvaluation() {
             ...s,
             [id]: { start: "", slotMinutes: 30, committeeCsv: "", error: null, success: null }
         })
+        setInterimAssignState(s => s[id] ? s : {
+            ...s,
+            [id]: { start: "", slotMinutes: 30, evaluatorsCsv: "", error: null, success: null }
+        })
     }
 
     const toggleAbstract = (id: number) => {
@@ -75,6 +88,9 @@ export default function CoordinatorEvaluation() {
 
     const updateAssign = (id: number, patch: Partial<typeof assignState[number]>) => {
         setAssignState(s => ({ ...s, [id]: { ...(s[id] || { start: "", slotMinutes: 30, committeeCsv: "" }), ...patch } }))
+    }
+    const updateInterimAssign = (id: number, patch: Partial<typeof interimAssignState[number]>) => {
+        setInterimAssignState(s => ({ ...s, [id]: { ...(s[id] || { start: "", slotMinutes: 30, evaluatorsCsv: "" }), ...patch } }))
     }
 
     const toIso = (localValue: string) => {
@@ -89,6 +105,7 @@ export default function CoordinatorEvaluation() {
         updateAssign(id, { loading: true, error: null, success: null })
         if (!state.start || !state.committeeCsv) {
             updateAssign(id, { loading: false, error: "Provide start time and committee emails" })
+            toast.error("Missing required fields: start time and committee emails")
             return
         }
 
@@ -111,15 +128,19 @@ export default function CoordinatorEvaluation() {
             })
             const data = await resp.json().catch(() => null)
             if (!resp.ok) {
-                updateAssign(id, { loading: false, error: data?.message || resp.statusText })
+                const msg = data?.message || resp.statusText
+                updateAssign(id, { loading: false, error: msg })
+                toast.error(`Schedule not saved: ${msg}`)
             } else {
                 updateAssign(id, { loading: false, success: "Scheduled" })
+                toast.success("Defense schedule saved")
                 // refresh list so defense info appears
                 await fetchRegistrations()
             }
         } catch (err) {
             console.error(err)
             updateAssign(id, { loading: false, error: "Scheduling failed" })
+            toast.error("Schedule not saved: request failed")
         }
     }
 
@@ -187,6 +208,47 @@ export default function CoordinatorEvaluation() {
     const truncate = (text?: string, len = 120) => {
         if (!text) return ""
         return text.length > len ? text.slice(0, len) + "…" : text
+    }
+
+    const handleInterimAssign = async (id: number) => {
+        const s = interimAssignState[id]
+        if (!s) return
+        updateInterimAssign(id, { loading: true, error: null, success: null })
+        if (!s.start || !s.evaluatorsCsv) {
+            updateInterimAssign(id, { loading: false, error: "Provide start time and evaluator emails" })
+            toast.error("Missing required fields: start time and evaluator emails")
+            return
+        }
+        try {
+            const evaluators = s.evaluatorsCsv.split(",").map(x => x.trim()).filter(Boolean)
+            const body = {
+                start: toIso(s.start),
+                end: s.end ? toIso(s.end as string) : toIso(s.start),
+                slot_minutes: s.slotMinutes,
+                evaluators,
+                registration_ids: [id]
+            }
+            const resp = await fetch("http://localhost:8000/interim_schedule", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-User-Email": user?.email || ""
+                },
+                body: JSON.stringify(body)
+            })
+            const data = await resp.json().catch(() => null)
+            if (!resp.ok) {
+                const msg = data?.message || resp.statusText
+                updateInterimAssign(id, { loading: false, error: msg })
+                toast.error(`Interim schedule not saved: ${msg}`)
+            } else {
+                updateInterimAssign(id, { loading: false, success: "Interim scheduled" })
+                toast.success("Interim evaluation schedule saved")
+            }
+        } catch (err) {
+            updateInterimAssign(id, { loading: false, error: "Interim scheduling failed" })
+            toast.error("Interim schedule not saved: request failed")
+        }
     }
 
     return (
@@ -316,6 +378,31 @@ export default function CoordinatorEvaluation() {
 
                                                 {s.error && <div className="text-red-600 mt-2">{s.error}</div>}
                                                 {s.success && <div className="text-green-600 mt-2">{s.success}</div>}
+
+                                                <div className="mt-6 border-t pt-3">
+                                                    <div className="text-sm font-medium mb-2">Interim evaluation scheduling</div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
+                                                        <div>
+                                                            <Label className="text-sm">Start</Label>
+                                                            <Input type="datetime-local" value={interimAssignState[reg.id]?.start || ""} onChange={(e) => updateInterimAssign(reg.id, { start: e.target.value })} />
+                                                        </div>
+                                                        <div>
+                                                            <Label className="text-sm">Slot minutes</Label>
+                                                            <Input type="number" min={5} value={interimAssignState[reg.id]?.slotMinutes || 30} onChange={(e) => updateInterimAssign(reg.id, { slotMinutes: Number(e.target.value) })} />
+                                                        </div>
+                                                        <div className="md:col-span-2">
+                                                            <Label className="text-sm">Evaluator emails (comma separated)</Label>
+                                                            <Input value={interimAssignState[reg.id]?.evaluatorsCsv || ""} onChange={(e) => updateInterimAssign(reg.id, { evaluatorsCsv: e.target.value })} placeholder="member1@example.com, member2@example.com" />
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <Button onClick={() => handleInterimAssign(reg.id)} disabled={interimAssignState[reg.id]?.loading}>
+                                                                {interimAssignState[reg.id]?.loading ? "Scheduling..." : "Save Interim"}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                    {interimAssignState[reg.id]?.error && <div className="text-red-600 mt-2">{interimAssignState[reg.id]?.error}</div>}
+                                                    {interimAssignState[reg.id]?.success && <div className="text-green-600 mt-2">{interimAssignState[reg.id]?.success}</div>}
+                                                </div>
                                             </td>
                                         </tr>
                                     )}

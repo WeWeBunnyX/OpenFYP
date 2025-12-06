@@ -3,16 +3,6 @@
 import React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
-import {
-    AlertDialog,
-    AlertDialogTrigger,
-    AlertDialogContent,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogDescription,
-    AlertDialogAction,
-    AlertDialogCancel,
-} from "@/components/ui/alert-dialog"
 
 type Schedule = {
     id: number
@@ -28,14 +18,29 @@ type Schedule = {
     created_at?: string
 }
 
+type InterimSchedule = {
+    id: number
+    registration_id?: number
+    title?: string
+    notes?: string
+    student_email?: string
+    status?: string
+    start?: string | null
+    end?: string | null
+    slot_minutes?: number
+    evaluators?: string[]
+    created_at?: string
+}
+
 export default function CoordinatorScheduling() {
     const { user } = useAuth()
     const [schedules, setSchedules] = React.useState<Schedule[]>([])
     const [loading, setLoading] = React.useState(false)
     const [deletingId, setDeletingId] = React.useState<number | null>(null)
     const [error, setError] = React.useState<string | null>(null)
-    const [confirmOpen, setConfirmOpen] = React.useState(false)
-    const [targetId, setTargetId] = React.useState<number | null>(null)
+    const [interimSchedules, setInterimSchedules] = React.useState<InterimSchedule[]>([])
+    const [loadingInterim, setLoadingInterim] = React.useState(false)
+    const [deletingInterimId, setDeletingInterimId] = React.useState<number | null>(null)
 
     const load = async () => {
         setLoading(true)
@@ -49,10 +54,11 @@ export default function CoordinatorScheduling() {
                 setError(body?.message || res.statusText || "Failed to load schedules")
                 setSchedules([])
                 return
+            } else {
+                const json = await res.json().catch(() => null)
+                const data = (json as { schedules?: Schedule[] } | null) || { schedules: [] }
+                setSchedules(data.schedules || [])
             }
-            const json = await res.json().catch(() => null)
-            const data = (json as { schedules?: Schedule[] } | null) || { schedules: [] }
-            setSchedules(data.schedules || [])
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             setError(msg || "Failed to load schedules")
@@ -63,9 +69,35 @@ export default function CoordinatorScheduling() {
     }
 
     React.useEffect(() => {
-        load()
+        load();
+        loadInterim();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.email])
+
+    const loadInterim = async () => {
+        setLoadingInterim(true)
+        try {
+            const res = await fetch("http://localhost:8000/interim_schedules", {
+                headers: { "X-User-Email": user?.email || "" },
+            })
+            if (!res.ok) {
+                // don't override error if defense already set one; append
+                const body = await res.json().catch(() => null)
+                setError(prev => prev ? prev + " | " + (body?.message || res.statusText) : (body?.message || res.statusText))
+                setInterimSchedules([])
+            } else {
+                const json = await res.json().catch(() => null)
+                const data = (json as { interim_schedules?: InterimSchedule[] } | null) || { interim_schedules: [] }
+                setInterimSchedules(data.interim_schedules || [])
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            setError(prev => prev ? prev + " | " + msg : msg)
+            setInterimSchedules([])
+        } finally {
+            setLoadingInterim(false)
+        }
+    }
 
     const deleteSchedule = async (id: number) => {
         if (!user) return
@@ -73,19 +105,9 @@ export default function CoordinatorScheduling() {
             setError("Only coordinators can delete schedules")
             return
         }
-        // show confirmation dialog instead of browser confirm
-        setTargetId(id)
-        setConfirmOpen(true)
-    }
-
-    const confirmDelete = async () => {
-        const id = targetId
-        if (!id || !user) {
-            setConfirmOpen(false)
-            return
-        }
+        const ok = window.confirm("Delete this schedule? This will clear the assigned defense for the student.")
+        if (!ok) return
         setDeletingId(id)
-        setConfirmOpen(false)
         try {
             const res = await fetch(`http://localhost:8000/schedules/${id}`, {
                 method: "DELETE",
@@ -93,17 +115,46 @@ export default function CoordinatorScheduling() {
             })
             const body = await res.json().catch(() => null)
             if (!res.ok) {
-                setError((body && (body as any).message) || res.statusText || "Delete failed")
+                const msg = (body as { message?: string } | null)?.message
+                setError(msg || res.statusText || "Delete failed")
             } else {
-                // refresh list
-                await load()
+                await load();
+                await loadInterim();
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             setError(msg || "Delete failed")
         } finally {
             setDeletingId(null)
-            setTargetId(null)
+        }
+    }
+
+    const deleteInterim = async (id: number) => {
+        if (!user) return
+        if (user.role !== "Coordinator") {
+            setError("Only coordinators can delete interim schedules")
+            return
+        }
+        const ok = window.confirm("Delete this interim schedule?")
+        if (!ok) return
+        setDeletingInterimId(id)
+        try {
+            const res = await fetch(`http://localhost:8000/interim_schedules/${id}`, {
+                method: "DELETE",
+                headers: { "X-User-Email": user.email || "" },
+            })
+            const body = await res.json().catch(() => null)
+            if (!res.ok) {
+                const msg = (body as { message?: string } | null)?.message
+                setError(msg || res.statusText || "Delete failed")
+            } else {
+                await loadInterim()
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            setError(msg || "Delete failed")
+        } finally {
+            setDeletingInterimId(null)
         }
     }
 
@@ -115,21 +166,7 @@ export default function CoordinatorScheduling() {
                     <Button onClick={load} variant="outline" size="sm">Refresh</Button>
                 </div>
             </div>
-            {/* Confirmation dialog for delete */}
-            <AlertDialog open={confirmOpen} onOpenChange={(v) => setConfirmOpen(v)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete schedule?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will permanently delete the schedule and clear the assigned defense for the student. This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="flex items-center justify-end gap-2 mt-4">
-                        <AlertDialogCancel onClick={() => setConfirmOpen(false)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => confirmDelete()} className="bg-destructive text-white">Delete</AlertDialogAction>
-                    </div>
-                </AlertDialogContent>
-            </AlertDialog>
+            {/* Using window.confirm for deletes to keep UI simple */}
 
             {loading && <div className="mb-2">Loading schedules…</div>}
             {error && <div className="mb-2 text-red-600">{error}</div>}
@@ -178,6 +215,59 @@ export default function CoordinatorScheduling() {
                     </tbody>
                 </table>
             </div>
-        </div>
-    )
-}
+
+            <div className="mt-8">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold">Interim Schedules</h3>
+                    <div className="flex gap-2">
+                        <Button onClick={loadInterim} variant="outline" size="sm">Refresh</Button>
+                    </div>
+                </div>
+                {loadingInterim && <div className="mb-2">Loading interim…</div>}
+                <div className="overflow-auto border rounded w-full min-w-0">
+                    <table className="w-full table-auto">
+                        <thead className="text-left bg-gray-50">
+                        <tr>
+                            <th className="p-2">#</th>
+                            <th className="p-2">Title</th>
+                            <th className="p-2">Student</th>
+                            <th className="p-2">Start</th>
+                            <th className="p-2">End</th>
+                            <th className="p-2">Evaluators</th>
+                            <th className="p-2">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {interimSchedules.length === 0 && !loadingInterim && (
+                            <tr><td colSpan={7} className="p-4 text-center text-sm text-muted-foreground">No interim schedules found</td></tr>
+                        )}
+                        {interimSchedules.map(s => (
+                            <tr key={s.id} className="border-t">
+                                <td className="p-2 align-top">{s.id}</td>
+                                <td className="p-2 align-top">{s.title || "-"}</td>
+                                <td className="p-2 align-top">{s.student_email || "-"}</td>
+                                <td className="p-2 align-top">{s.start ? new Date(s.start).toLocaleString() : "-"}</td>
+                                <td className="p-2 align-top">{s.end ? new Date(s.end).toLocaleString() : "-"}</td>
+                                <td className="p-2 align-top text-sm">{s.evaluators && s.evaluators.length ? s.evaluators.join(", ") : "-"}</td>
+                                <td className="p-2 align-top">
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="ghost" onClick={() => {
+                                            const txt = `Title: ${s.title}\nStudent: ${s.student_email}\nStart: ${s.start}\nEvaluators: ${s.evaluators?.join(", ") || ""}`
+                                            navigator.clipboard?.writeText(txt)
+                                        }}>Copy</Button>
+                                        {user?.role === "Coordinator" && (
+                                            <Button size="sm" variant="destructive" onClick={() => deleteInterim(s.id)} disabled={deletingInterimId === s.id}>
+                                                {deletingInterimId === s.id ? "Deleting..." : "Delete"}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+         </div>
+     )
+ }

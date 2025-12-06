@@ -94,6 +94,21 @@ class Scheduling(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class InterimScheduling(SQLModel, table=True):
+    # Separate table for interim evaluation schedules
+    id: Optional[int] = Field(default=None, primary_key=True)
+    registration_id: Optional[int] = None
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    student_email: Optional[str] = None
+    status: str = Field(default="scheduled")
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    slot_minutes: Optional[int] = None
+    evaluators: List[str] = Field(sa_column=Column(JSON), default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 def get_session():
     with Session(engine) as session:
         yield session
@@ -525,7 +540,87 @@ def create_schedule(data: dict, response: Response, x_user_email: str = Header(N
     return {"message": "Scheduled", "scheduling": [c.dict() for c in created], "updated_registrations": [r.dict() for r in updated_regs]}
 
 
-# New: list schedules endpoint
+@app.post("/interim_schedule")
+def create_interim_schedule(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """Create interim evaluation schedules for one or more registrations.
+
+    Body shape:
+    {
+      "start": "ISO string",
+      "end": "ISO string (optional)",
+      "slot_minutes": 30,
+      "evaluators": ["a@example.com", "b@example.com"],
+      "registration_ids": [1,2]
+    }
+    """
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can schedule interim evaluations"}
+
+    start_iso = data.get("start")
+    end_iso = data.get("end")
+    slot_minutes = data.get("slot_minutes")
+    evaluators = data.get("evaluators") or []
+    registration_ids = data.get("registration_ids") or []
+
+    if not start_iso or not registration_ids or not isinstance(registration_ids, list):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Missing start time or registration_ids"}
+
+    start_dt = _parse_iso_datetime(start_iso)
+    end_dt = _parse_iso_datetime(end_iso) if end_iso else None
+    if not start_dt:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Invalid start datetime"}
+
+    created = []
+    updated_regs = []
+    current_start = start_dt
+    try:
+        slot_mins = int(slot_minutes) if slot_minutes is not None else None
+    except Exception:
+        slot_mins = None
+
+    for rid in registration_ids:
+        try:
+            reg = session.get(Registration, rid)
+            if not reg:
+                continue
+
+            sched_start = current_start
+            sched_end = (sched_start + timedelta(minutes=slot_mins)) if (slot_mins and slot_mins > 0) else (end_dt or sched_start)
+
+            interim = InterimScheduling(
+                registration_id=reg.id,
+                title=reg.title,
+                notes=reg.abstract,
+                student_email=reg.owner,
+                start=sched_start,
+                end=sched_end,
+                slot_minutes=slot_mins,
+                evaluators=evaluators,
+            )
+            session.add(interim)
+
+            reg.history = reg.history or []
+            reg.history.append({"actor": x_user_email, "action": "interim_scheduled", "note": f"Interim scheduled with evaluators: {', '.join(evaluators)}", "at": datetime.utcnow().isoformat()})
+            session.add(reg)
+
+            push_notification_db(session, reg.owner, f"Your interim evaluation for '{reg.title}' has been scheduled at {sched_start.isoformat()}")
+
+            created.append(interim)
+            updated_regs.append(reg)
+
+            if slot_mins and slot_mins > 0:
+                current_start = sched_end
+        except Exception as e:
+            print("Interim schedule error for reg", rid, e)
+
+    session.commit()
+    return {"message": "Interim Scheduled", "interim_scheduling": [c.dict() for c in created], "updated_registrations": [r.dict() for r in updated_regs]}
+
+
 @app.get("/schedules")
 def list_schedules(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     """
@@ -570,6 +665,45 @@ def list_schedules(x_user_email: str = Header(None, alias="X-User-Email"), sessi
         }
 
     return {"schedules": [map_row(s) for s in rows]}
+
+
+@app.get("/interim_schedules")
+def list_interim_schedules(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user:
+        return {"interim_schedules": []}
+
+    try:
+        if user.role == "Coordinator":
+            rows = session.exec(select(InterimScheduling)).all()
+        elif user.role == "Student":
+            rows = session.exec(select(InterimScheduling).where(InterimScheduling.student_email == x_user_email)).all()
+        elif user.role == "Supervisor":
+            rows = session.exec(
+                select(InterimScheduling).join(Registration, InterimScheduling.registration_id == Registration.id).where(Registration.supervisor == x_user_email)
+            ).all()
+        else:
+            rows = []
+    except Exception as e:
+        print("Error listing interim schedules:", e)
+        rows = []
+
+    def map_row(s: InterimScheduling):
+        return {
+            "id": s.id,
+            "registration_id": s.registration_id,
+            "title": s.title,
+            "notes": s.notes,
+            "student_email": s.student_email,
+            "status": s.status,
+            "start": s.start.isoformat() if s.start else None,
+            "end": s.end.isoformat() if s.end else None,
+            "slot_minutes": s.slot_minutes,
+            "evaluators": s.evaluators,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+
+    return {"interim_schedules": [map_row(s) for s in rows]}
 
 
 @app.delete("/registrations/{reg_id}")
@@ -720,3 +854,35 @@ def delete_schedule(sched_id: int, response: Response, x_user_email: str = Heade
     session.commit()
     return {"message": "Deleted"}
 
+
+@app.delete("/interim_schedules/{sched_id}")
+def delete_interim_schedule(sched_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can delete interim schedules"}
+
+    sched = session.get(InterimScheduling, sched_id)
+    if not sched:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
+
+    if sched.registration_id:
+        reg = session.get(Registration, sched.registration_id)
+        if reg:
+            try:
+                reg.history = reg.history or []
+                reg.history.append({"actor": x_user_email, "action": "interim_unscheduled", "note": "Interim schedule deleted by coordinator", "at": datetime.utcnow().isoformat()})
+                session.add(reg)
+            except Exception as e:
+                print("Failed updating registration during interim delete:", e)
+
+    try:
+        session.delete(sched)
+    except Exception as e:
+        print("Failed to delete interim schedule:", e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"message": "Delete failed"}
+
+    session.commit()
+    return {"message": "Deleted"}
