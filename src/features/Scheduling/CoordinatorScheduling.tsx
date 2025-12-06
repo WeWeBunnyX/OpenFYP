@@ -3,6 +3,7 @@
 import React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 type Schedule = {
     id: number
@@ -103,6 +104,7 @@ export default function CoordinatorScheduling() {
         if (!user) return
         if (user.role !== "Coordinator") {
             setError("Only coordinators can delete schedules")
+            toast.error("Only coordinators can delete schedules")
             return
         }
         const ok = window.confirm("Delete this schedule? This will clear the assigned defense for the student.")
@@ -117,13 +119,16 @@ export default function CoordinatorScheduling() {
             if (!res.ok) {
                 const msg = (body as { message?: string } | null)?.message
                 setError(msg || res.statusText || "Delete failed")
+                toast.error(`Delete failed: ${msg || res.statusText}`)
             } else {
                 await load();
                 await loadInterim();
+                toast.success("Schedule deleted")
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             setError(msg || "Delete failed")
+            toast.error(`Delete failed: ${msg}`)
         } finally {
             setDeletingId(null)
         }
@@ -133,6 +138,7 @@ export default function CoordinatorScheduling() {
         if (!user) return
         if (user.role !== "Coordinator") {
             setError("Only coordinators can delete interim schedules")
+            toast.error("Only coordinators can delete interim schedules")
             return
         }
         const ok = window.confirm("Delete this interim schedule?")
@@ -147,12 +153,15 @@ export default function CoordinatorScheduling() {
             if (!res.ok) {
                 const msg = (body as { message?: string } | null)?.message
                 setError(msg || res.statusText || "Delete failed")
+                toast.error(`Delete failed: ${msg || res.statusText}`)
             } else {
                 await loadInterim()
+                toast.success("Interim schedule deleted")
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             setError(msg || "Delete failed")
+            toast.error(`Delete failed: ${msg}`)
         } finally {
             setDeletingInterimId(null)
         }

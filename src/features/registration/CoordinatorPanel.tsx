@@ -2,10 +2,20 @@ import React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { toast } from "sonner"
+
+type Registration = {
+  id: number
+  owner: string
+  title: string
+  supervisor: string
+  abstract?: string
+  status: string
+}
 
 export default function CoordinatorPanel() {
   const { user } = useAuth()
-  const [regs, setRegs] = React.useState<any[]>([])
+  const [regs, setRegs] = React.useState<Registration[]>([])
   const [message, setMessage] = React.useState<string | null>(null)
 
   const load = async () => {
@@ -13,7 +23,7 @@ export default function CoordinatorPanel() {
       headers: { "X-User-Email": user?.email || "" },
     })
     const data = await res.json()
-    setRegs(data.registrations || [])
+    setRegs((data.registrations || []) as Registration[])
   }
 
   const statusLabel = (s: string) => {
