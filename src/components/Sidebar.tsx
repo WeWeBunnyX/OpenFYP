@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Home, BookOpen, ClipboardList, Users, CalendarDays, Settings, FileText, Award, LogOut, ChevronLeft } from "lucide-react"
 
@@ -27,6 +28,7 @@ type Role = "Student" | "Supervisor" | "Coordinator" | "Committee"
 
 export default function AppSidebar({ role = "Student" as Role, onSelect, }: { role?: Role; onSelect?: (key: string) => void }) {
   const [active, setActive] = React.useState<string>("dashboard")
+  const { logout, user } = useAuth()
 
   const menu = [
     { key: "dashboard", label: "Dashboard", icon: Home },
@@ -129,15 +131,15 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarFallback>U</AvatarFallback>
+                  <AvatarFallback>{user?.name ? user.name[0] : "U"}</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                  <div className="text-sm">John Doe</div>
+                  <div className="text-sm">{user?.name || "User"}</div>
                   <div className="text-xs text-muted-foreground">{role}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" onClick={() => logout()} aria-label="Logout">
                   <LogOut className="size-4" />
                 </Button>
               </div>
