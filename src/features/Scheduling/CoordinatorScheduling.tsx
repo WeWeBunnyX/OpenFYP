@@ -3,6 +3,16 @@
 import React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogAction,
+    AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 
 type Schedule = {
     id: number
@@ -24,6 +34,8 @@ export default function CoordinatorScheduling() {
     const [loading, setLoading] = React.useState(false)
     const [deletingId, setDeletingId] = React.useState<number | null>(null)
     const [error, setError] = React.useState<string | null>(null)
+    const [confirmOpen, setConfirmOpen] = React.useState(false)
+    const [targetId, setTargetId] = React.useState<number | null>(null)
 
     const load = async () => {
         setLoading(true)
@@ -61,9 +73,19 @@ export default function CoordinatorScheduling() {
             setError("Only coordinators can delete schedules")
             return
         }
-        const ok = window.confirm("Delete this schedule? This will clear the assigned defense for the student.")
-        if (!ok) return
+        // show confirmation dialog instead of browser confirm
+        setTargetId(id)
+        setConfirmOpen(true)
+    }
+
+    const confirmDelete = async () => {
+        const id = targetId
+        if (!id || !user) {
+            setConfirmOpen(false)
+            return
+        }
         setDeletingId(id)
+        setConfirmOpen(false)
         try {
             const res = await fetch(`http://localhost:8000/schedules/${id}`, {
                 method: "DELETE",
@@ -81,6 +103,7 @@ export default function CoordinatorScheduling() {
             setError(msg || "Delete failed")
         } finally {
             setDeletingId(null)
+            setTargetId(null)
         }
     }
 
@@ -92,6 +115,21 @@ export default function CoordinatorScheduling() {
                     <Button onClick={load} variant="outline" size="sm">Refresh</Button>
                 </div>
             </div>
+            {/* Confirmation dialog for delete */}
+            <AlertDialog open={confirmOpen} onOpenChange={(v) => setConfirmOpen(v)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete schedule?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the schedule and clear the assigned defense for the student. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="flex items-center justify-end gap-2 mt-4">
+                        <AlertDialogCancel onClick={() => setConfirmOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => confirmDelete()} className="bg-destructive text-white">Delete</AlertDialogAction>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {loading && <div className="mb-2">Loading schedules…</div>}
             {error && <div className="mb-2 text-red-600">{error}</div>}
