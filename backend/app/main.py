@@ -345,13 +345,13 @@ def approve_registration(reg_id: int, data: dict = Body(None), response: Respons
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
-    # optional remarks provided by supervisor
+    # optional remarks provided by supervisor — overwrite if key present (allow empty string)
     remarks = None
-    if isinstance(data, dict):
+    if isinstance(data, dict) and "remarks" in data:
         remarks = data.get("remarks")
 
     reg.status = "approved"
-    if remarks:
+    if remarks is not None:
         reg.remarks = remarks
     reg.history = reg.history or []
     note = "Supervisor approved"
@@ -381,13 +381,13 @@ def reject_registration(reg_id: int, data: dict = Body(None), response: Response
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
-    # optional remarks provided by supervisor
+    # optional remarks provided by supervisor — overwrite if key present (allow empty string)
     remarks = None
-    if isinstance(data, dict):
+    if isinstance(data, dict) and "remarks" in data:
         remarks = data.get("remarks")
 
     reg.status = "rejected"
-    if remarks:
+    if remarks is not None:
         reg.remarks = remarks
     reg.history = reg.history or []
     note = "Supervisor rejected"

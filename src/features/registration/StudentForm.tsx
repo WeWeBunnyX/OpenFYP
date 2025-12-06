@@ -67,14 +67,27 @@ export default function StudentForm() {
       })
       const json = await res.json()
       if (res.ok && Array.isArray(json.registrations)) {
-        setRegistrations(json.registrations)
-        if (json.registrations.length > 0) {
-          // default to first
-          setSelectedRegistrationId(json.registrations[0].id)
-          setSubmittedRegistration(json.registrations[0])
+        const regs = json.registrations
+        setRegistrations(regs)
+        if (selectedRegistrationId) {
+          const sel = regs.find((r: any) => r.id === selectedRegistrationId)
+          if (sel) {
+            setSubmittedRegistration(sel)
+          } else if (regs.length > 0) {
+            setSelectedRegistrationId(regs[0].id)
+            setSubmittedRegistration(regs[0])
+          } else {
+            setSelectedRegistrationId(null)
+            setSubmittedRegistration(null)
+          }
         } else {
-          setSelectedRegistrationId(null)
-          setSubmittedRegistration(null)
+          if (regs.length > 0) {
+            setSelectedRegistrationId(regs[0].id)
+            setSubmittedRegistration(regs[0])
+          } else {
+            setSelectedRegistrationId(null)
+            setSubmittedRegistration(null)
+          }
         }
       }
     } catch (e) {
@@ -110,6 +123,16 @@ export default function StudentForm() {
   React.useEffect(() => {
     fetchAttachments(selectedRegistrationId)
   }, [selectedRegistrationId, user])
+
+  // Poll registrations so students see updated status/remarks shortly after supervisors act
+  React.useEffect(() => {
+    if (!user?.email) return
+    const iv = setInterval(() => {
+      fetchRegistrations()
+    }, 8000)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, selectedRegistrationId])
 
   const submit = async () => {
     setLoading(true)
