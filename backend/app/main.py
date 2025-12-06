@@ -442,6 +442,38 @@ def verify_registration(reg_id: int, response: Response, x_user_email: str = Hea
     return {"message": "Verified", "registration": reg.dict()}
 
 
+@app.patch("/registrations/{reg_id}/unverify")
+def unverify_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """Allow a Coordinator to mark a registration as unverified (revert to 'approved').
+
+    This is intended for coordinators to undo their verification and return the registration to the
+    'approved' state so it can be re-verified later.
+    """
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can unverify"}
+
+    reg = session.get(Registration, reg_id)
+    if not reg:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
+
+    # Only allow unverify when currently registered
+    if reg.status != "registered":
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Only currently registered items can be unverified"}
+
+    reg.status = "approved"
+    reg.history = reg.history or []
+    reg.history.append({"actor": x_user_email, "action": "unverified", "note": "Coordinator un-verified (reverted to approved)", "at": datetime.utcnow().isoformat()})
+    session.add(reg)
+    push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was unverified by coordinator {x_user_email}")
+    session.commit()
+    session.refresh(reg)
+    return {"message": "Unverified", "registration": reg.dict()}
+
+
 @app.post("/schedule")
 def create_schedule(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     """Create scheduling entries for one or more registrations.
