@@ -667,3 +667,56 @@ def update_registration(reg_id: int, data: dict, response: Response, x_user_emai
     if attachment_record:
         result["attachment"] = attachment_record
     return result
+
+
+@app.delete("/schedules/{sched_id}")
+def delete_schedule(sched_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """Delete a scheduling entry. Only Coordinators can delete schedules.
+
+    When deleted, the linked registration.defense is cleared and registration.status is set back to 'registered' if it was 'scheduled'.
+    """
+    user = session.get(User, x_user_email)
+    if not user:
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Unauthorized"}
+
+    if user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can delete schedules"}
+
+    sched = session.get(Scheduling, sched_id)
+    if not sched:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "Not found"}
+
+    # clear associated registration defense if any
+    if sched.registration_id:
+        reg = session.get(Registration, sched.registration_id)
+        if reg:
+            try:
+                reg.defense = None
+                if reg.status == "scheduled":
+                    reg.status = "registered"
+                reg.history = reg.history or []
+                reg.history.append({"actor": x_user_email, "action": "unscheduled", "note": "Schedule deleted by coordinator", "at": datetime.utcnow().isoformat()})
+                session.add(reg)
+            except Exception as e:
+                print("Failed updating registration during schedule delete:", e)
+
+    try:
+        session.delete(sched)
+    except Exception as e:
+        print("Failed to delete schedule:", e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {"message": "Delete failed"}
+
+    # notify student
+    try:
+        if sched.student_email:
+            push_notification_db(session, sched.student_email, f"Your schedule (id={sched.id}) was deleted by {x_user_email}")
+    except Exception:
+        pass
+
+    session.commit()
+    return {"message": "Deleted"}
+

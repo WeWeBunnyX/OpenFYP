@@ -22,6 +22,7 @@ export default function CoordinatorScheduling() {
     const { user } = useAuth()
     const [schedules, setSchedules] = React.useState<Schedule[]>([])
     const [loading, setLoading] = React.useState(false)
+    const [deletingId, setDeletingId] = React.useState<number | null>(null)
     const [error, setError] = React.useState<string | null>(null)
 
     const load = async () => {
@@ -33,12 +34,16 @@ export default function CoordinatorScheduling() {
             })
             if (!res.ok) {
                 const body = await res.json().catch(() => null)
-                throw new Error(body?.message || res.statusText)
+                setError(body?.message || res.statusText || "Failed to load schedules")
+                setSchedules([])
+                return
             }
-            const data = await res.json()
+            const json = await res.json().catch(() => null)
+            const data = (json as { schedules?: Schedule[] } | null) || { schedules: [] }
             setSchedules(data.schedules || [])
-        } catch (err: any) {
-            setError(err?.message || "Failed to load schedules")
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            setError(msg || "Failed to load schedules")
             setSchedules([])
         } finally {
             setLoading(false)
@@ -49,6 +54,35 @@ export default function CoordinatorScheduling() {
         load()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.email])
+
+    const deleteSchedule = async (id: number) => {
+        if (!user) return
+        if (user.role !== "Coordinator") {
+            setError("Only coordinators can delete schedules")
+            return
+        }
+        const ok = window.confirm("Delete this schedule? This will clear the assigned defense for the student.")
+        if (!ok) return
+        setDeletingId(id)
+        try {
+            const res = await fetch(`http://localhost:8000/schedules/${id}`, {
+                method: "DELETE",
+                headers: { "X-User-Email": user.email || "" },
+            })
+            const body = await res.json().catch(() => null)
+            if (!res.ok) {
+                setError((body && (body as any).message) || res.statusText || "Delete failed")
+            } else {
+                // refresh list
+                await load()
+            }
+        } catch (err: any) {
+            const msg = err instanceof Error ? err.message : String(err)
+            setError(msg || "Delete failed")
+        } finally {
+            setDeletingId(null)
+        }
+    }
 
     return (
         <div className="p-6">
@@ -94,6 +128,11 @@ export default function CoordinatorScheduling() {
                                         const txt = `Title: ${s.title}\nStudent: ${s.student_email}\nStart: ${s.start}\nCommittee: ${s.committee?.join(", ") || ""}`
                                         navigator.clipboard?.writeText(txt)
                                     }}>Copy</Button>
+                                    {user?.role === "Coordinator" && (
+                                        <Button size="sm" variant="destructive" onClick={() => deleteSchedule(s.id)} disabled={deletingId === s.id}>
+                                            {deletingId === s.id ? "Deleting..." : "Delete"}
+                                        </Button>
+                                    )}
                                 </div>
                             </td>
                         </tr>
