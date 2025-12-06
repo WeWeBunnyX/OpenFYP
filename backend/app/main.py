@@ -17,11 +17,11 @@ import mimetypes
 import os
 from datetime import datetime
 
-from fastapi import FastAPI, Response, status, Header, Depends, Body
+from fastapi import FastAPI, Response, status, Header, Depends
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Field, create_engine, Session, select
-from sqlalchemy import Column, JSON, text
+from sqlalchemy import Column, JSON
 
 #Overriden by docker-compose.yml to point to Openfyp container (Backend + Db)->(openfyp-backend + postgres:15)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./backend/dev.db")
@@ -54,8 +54,6 @@ class Registration(SQLModel, table=True):
     title: str
     supervisor: str
     abstract: Optional[str] = None
-    remarks: Optional[str] = None
-    defense: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     status: str = Field(default="pending_approval")
     history: List[dict] = Field(sa_column=Column(JSON), default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -76,20 +74,6 @@ class Notification(SQLModel, table=True):
     message: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     read: bool = Field(default=False)
-
-
-class Scheduling(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    registration_id: Optional[int] = None
-    title: Optional[str] = None
-    proposal: Optional[str] = None
-    student_email: Optional[str] = None
-    status: str = Field(default="scheduled")
-    start: Optional[datetime] = None
-    end: Optional[datetime] = None
-    slot_minutes: Optional[int] = None
-    committee: List[str] = Field(sa_column=Column(JSON), default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 def get_session():
@@ -115,29 +99,6 @@ def on_startup():
             ]
             session.add_all(demo)
             session.commit()
-    # ensure registration.defense column exists (create_all won't alter existing tables)
-    try:
-        with engine.begin() as conn:
-            dialect = engine.dialect.name
-            if dialect == "postgresql":
-                res = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='registration' AND column_name='defense'"))
-                if res.first() is None:
-                    conn.execute(text("ALTER TABLE registration ADD COLUMN defense JSON"))
-            elif dialect == "sqlite":
-                # PRAGMA table_info returns rows with column info; name is at index 1
-                res = conn.execute(text("PRAGMA table_info('registration')"))
-                cols = [r[1] for r in res.fetchall()]
-                if "defense" not in cols:
-                    conn.execute(text("ALTER TABLE registration ADD COLUMN defense TEXT"))
-            else:
-                # try adding JSON column; if it fails, ignore
-                try:
-                    conn.execute(text("ALTER TABLE registration ADD COLUMN defense JSON"))
-                except Exception:
-                    pass
-    except Exception as e:
-        # don't prevent the app from starting; log to stdout for debugging
-        print("Could not ensure defense column exists:", e)
 
 
 def push_notification_db(session: Session, email: str, message: str):
@@ -176,18 +137,6 @@ def _save_attachment_file(base64_data: str, original_name: str) -> dict:
 
     mime_type, _ = mimetypes.guess_type(original_name)
     return {"filename": original_name, "filepath": str(dest.resolve()), "mime_type": mime_type}
-
-
-def _parse_iso_datetime(s: Optional[str]) -> Optional[datetime]:
-    if not s:
-        return None
-    try:
-        # JS toISOString() may end with 'Z' — replace with +00:00 for fromisoformat
-        if s.endswith("Z"):
-            s = s[:-1] + "+00:00"
-        return datetime.fromisoformat(s)
-    except Exception:
-        return None
 
 
 @app.get("/")
@@ -265,8 +214,7 @@ def list_registrations(x_user_email: str = Header(None, alias="X-User-Email"), s
         return {"registrations": []}
     role = user.role
     if role == "Supervisor":
-        # supervisors should see all registrations assigned to them (not only pending)
-        regs = session.exec(select(Registration).where(Registration.supervisor == x_user_email)).all()
+        regs = session.exec(select(Registration).where(Registration.status == "pending_approval", Registration.supervisor == x_user_email)).all()
         return {"registrations": [r.dict() for r in regs]}
     if role == "Coordinator":
         regs = session.exec(select(Registration)).all()
@@ -332,7 +280,7 @@ def download_attachment(att_id: int, x_user_email: str = Header(None, alias="X-U
 
 
 @app.patch("/registrations/{reg_id}/approve")
-def approve_registration(reg_id: int, data: dict = Body(None), response: Response = None, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+def approve_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     user = session.get(User, x_user_email)
     if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -343,19 +291,9 @@ def approve_registration(reg_id: int, data: dict = Body(None), response: Respons
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
-    # optional remarks provided by supervisor
-    remarks = None
-    if isinstance(data, dict):
-        remarks = data.get("remarks")
-
     reg.status = "approved"
-    if remarks:
-        reg.remarks = remarks
     reg.history = reg.history or []
-    note = "Supervisor approved"
-    if remarks:
-        note = f"{note}: {remarks}"
-    reg.history.append({"actor": x_user_email, "action": "approved", "note": note, "at": datetime.utcnow().isoformat()})
+    reg.history.append({"actor": x_user_email, "action": "approved", "note": "Supervisor approved", "at": datetime.utcnow().isoformat()})
     session.add(reg)
     push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was approved by {x_user_email}")
     coords = session.exec(select(User).where(User.role == "Coordinator")).all()
@@ -368,7 +306,7 @@ def approve_registration(reg_id: int, data: dict = Body(None), response: Respons
 
 
 @app.patch("/registrations/{reg_id}/reject")
-def reject_registration(reg_id: int, data: dict = Body(None), response: Response = None, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+def reject_registration(reg_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
     user = session.get(User, x_user_email)
     if not user or user.role != "Supervisor":
         response.status_code = status.HTTP_403_FORBIDDEN
@@ -379,19 +317,9 @@ def reject_registration(reg_id: int, data: dict = Body(None), response: Response
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
-    # optional remarks provided by supervisor
-    remarks = None
-    if isinstance(data, dict):
-        remarks = data.get("remarks")
-
     reg.status = "rejected"
-    if remarks:
-        reg.remarks = remarks
     reg.history = reg.history or []
-    note = "Supervisor rejected"
-    if remarks:
-        note = f"{note}: {remarks}"
-    reg.history.append({"actor": x_user_email, "action": "rejected", "note": note, "at": datetime.utcnow().isoformat()})
+    reg.history.append({"actor": x_user_email, "action": "rejected", "note": "Supervisor rejected", "at": datetime.utcnow().isoformat()})
     session.add(reg)
     push_notification_db(session, reg.owner, f"Your registration '{reg.title}' was rejected by {x_user_email}")
     session.commit()
@@ -419,88 +347,6 @@ def verify_registration(reg_id: int, response: Response, x_user_email: str = Hea
     session.commit()
     session.refresh(reg)
     return {"message": "Verified", "registration": reg.dict()}
-
-
-@app.post("/schedule")
-def create_schedule(data: dict, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
-    """Create scheduling entries for one or more registrations.
-
-    Expected body:
-    {
-      "start": "ISO string",
-      "end": "ISO string (optional)",
-      "slot_minutes": 30,
-      "committee_pool": ["a@example.com", "b@example.com"],
-      "registration_ids": [1,2]
-    }
-    """
-    user = session.get(User, x_user_email)
-    if not user or user.role != "Coordinator":
-        response.status_code = status.HTTP_403_FORBIDDEN
-        return {"message": "Only coordinators can schedule defenses"}
-
-    start_iso = data.get("start")
-    end_iso = data.get("end")
-    slot_minutes = data.get("slot_minutes")
-    committee_pool = data.get("committee_pool") or []
-    registration_ids = data.get("registration_ids") or []
-
-    if not start_iso or not registration_ids or not isinstance(registration_ids, list):
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return {"message": "Missing start time or registration_ids"}
-
-    start_dt = _parse_iso_datetime(start_iso)
-    end_dt = _parse_iso_datetime(end_iso) or start_dt
-    if not start_dt:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return {"message": "Invalid start datetime"}
-
-    created = []
-    updated_regs = []
-    for rid in registration_ids:
-        try:
-            reg = session.get(Registration, rid)
-            if not reg:
-                continue
-
-            sched = Scheduling(
-                registration_id=reg.id,
-                title=reg.title,
-                proposal=reg.abstract,
-                student_email=reg.owner,
-                start=start_dt,
-                end=end_dt,
-                slot_minutes=slot_minutes,
-                committee=committee_pool,
-            )
-            session.add(sched)
-
-            # update registration.defense so UI can show it
-            reg.defense = {"start": start_dt.isoformat(), "end": (end_dt.isoformat() if end_dt else None), "committee": committee_pool}
-            session.add(reg)
-
-            # mark registration as scheduled so coordinators still see it and UI can show assigned badge
-            try:
-                reg.status = "scheduled"
-            except Exception:
-                pass
-
-            # optional: add history note
-            reg.history = reg.history or []
-            reg.history.append({"actor": x_user_email, "action": "scheduled", "note": f"Scheduled defense with committee: {', '.join(committee_pool)}", "at": datetime.utcnow().isoformat()})
-
-            # notifications
-            push_notification_db(session, reg.owner, f"Your defense for '{reg.title}' has been scheduled at {start_dt.isoformat()}")
-
-            created.append(sched)
-            updated_regs.append(reg)
-        except Exception as e:
-            # continue on individual failures
-            print("Scheduling error for reg", rid, e)
-
-    session.commit()
-
-    return {"message": "Scheduled", "scheduling": [c.dict() for c in created], "updated_registrations": [r.dict() for r in updated_regs]}
 
 
 

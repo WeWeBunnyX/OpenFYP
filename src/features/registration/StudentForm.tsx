@@ -326,20 +326,6 @@ export default function StudentForm() {
     }
   }
 
-  const renderStatusBadge = (status: string | undefined) => {
-    const s = (status || "").toLowerCase()
-    if (s === "pending_approval") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-yellow-800 bg-yellow-100">Pending Approval</span>
-    }
-    if (s === "approved" || s === "registered") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-green-800 bg-green-100">Approved</span>
-    }
-    if (s === "rejected") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-red-800 bg-red-100">Rejected</span>
-    }
-    return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-gray-700 bg-gray-100">{status}</span>
-  }
-
   return (
     <div className="p-6 w-full flex">
       <Card className="w-full max-w-full">
@@ -422,12 +408,10 @@ export default function StudentForm() {
                 <>
                   <CardContent>
                     <div className="p-4">
-                    <div className="font-medium">Submitted: {submittedRegistration.title}</div>
-                    <div className="text-sm text-muted-foreground">Supervisor: {submittedRegistration.supervisor}</div>
-                    <div className="mt-2">{renderStatusBadge(submittedRegistration.status)}</div>
-                    {submittedRegistration.remarks && <div className="mt-2 text-sm text-muted-foreground">Remarks: {submittedRegistration.remarks}</div>}
-                    {submittedRegistration.abstract && <div className="mt-2">{submittedRegistration.abstract}</div>}
-                  </div>
+                      <div className="font-medium">Submitted: {submittedRegistration.title}</div>
+                      <div className="text-sm text-muted-foreground">Supervisor: {submittedRegistration.supervisor}</div>
+                      {submittedRegistration.abstract && <div className="mt-2">{submittedRegistration.abstract}</div>}
+                    </div>
                   </CardContent>
                   <CardFooter>
                     <div className="w-full flex items-center justify-between gap-2">
