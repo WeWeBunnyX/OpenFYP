@@ -73,6 +73,24 @@ export default function SupervisorPanel() {
     }
   }
 
+  const renderStatusBadge = (status?: string) => {
+    const s = status || "-"
+    const base = "inline-block px-2 py-1 rounded text-xs font-medium"
+    switch (s) {
+      case "approved":
+        return <span className={base + " bg-green-100 text-green-800"}>Approved</span>
+      case "registered":
+        return <span className={base + " bg-green-100 text-green-800"}>Verified</span>
+      case "rejected":
+        return <span className={base + " bg-red-100 text-red-800"}>Rejected</span>
+      case "scheduled":
+        return <span className={base + " bg-sky-100 text-sky-800"}>Scheduled</span>
+      case "pending_approval":
+      default:
+        return <span className={base + " bg-yellow-100 text-yellow-800"}>Pending</span>
+    }
+  }
+
   return (
     <div className="p-6">
       <Card>
@@ -90,14 +108,33 @@ export default function SupervisorPanel() {
                     <div className="font-semibold">{r.title}</div>
                     <div className="text-sm text-muted-foreground">By: {r.owner}</div>
                     <div className="mt-2">{r.abstract}</div>
-                    <div className="mt-2 text-sm">Status: <strong>{r.status}</strong></div>
+                    <div className="mt-2 text-sm">Status: {renderStatusBadge(r.status)}</div>
                     {r.remarks && <div className="mt-1 text-sm text-muted-foreground">Remarks: {r.remarks}</div>}
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <div className="text-xs text-muted-foreground">Submitted: {new Date(r.created_at).toLocaleString()}</div>
                     <div className="flex gap-2 mt-2">
-                      <Button size="sm" onClick={() => openAction(r.id, "approve")}>Approve</Button>
-                      <Button size="sm" variant="ghost" onClick={() => openAction(r.id, "reject")}>Reject</Button>
+                      {/* Approve button: disabled/outlined when already approved */}
+                      <Button
+                        size="sm"
+                        onClick={() => openAction(r.id, "approve")}
+                        disabled={r.status === "approved"}
+                        variant={r.status === "approved" ? "outline" : "default"}
+                        aria-pressed={r.status === "approved"}
+                      >
+                        Approve
+                      </Button>
+
+                      {/* Reject button: destructive when actionable, outlined when already rejected */}
+                      <Button
+                        size="sm"
+                        onClick={() => openAction(r.id, "reject")}
+                        disabled={r.status === "rejected"}
+                        variant={r.status === "rejected" ? "outline" : "destructive"}
+                        aria-pressed={r.status === "rejected"}
+                      >
+                        Reject
+                      </Button>
                     </div>
                   </div>
                 </div>

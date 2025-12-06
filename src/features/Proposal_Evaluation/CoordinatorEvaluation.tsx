@@ -308,10 +308,14 @@ export default function CoordinatorEvaluation() {
                                                 <Button onClick={() => openAssign(reg.id)} size="sm" variant={reg.defense ? "secondary" : "default"}>
                                                     {reg.defense ? "Reassign" : "Assign"}
                                                 </Button>
-                                                {reg.status !== "registered" ? (
+                                                {reg.status === "approved" ? (
                                                     <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
-                                                ) : (
+                                                ) : reg.status === "registered" ? (
                                                     <div className="text-sm text-green-600 self-center">Verified</div>
+                                                ) : reg.status === "rejected" ? (
+                                                    <div className="text-sm text-red-600 italic self-center">Rejected proposals cannot be verified</div>
+                                                ) : (
+                                                    <div className="text-sm text-muted-foreground self-center">{reg.status || "-"}</div>
                                                 )}
                                                 <Button variant="ghost" onClick={() => toggleAbstract(reg.id)} size="sm">
                                                     {absVisible ? "Hide" : "View"}
