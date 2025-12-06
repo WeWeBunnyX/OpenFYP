@@ -32,8 +32,6 @@ export default function CoordinatorEvaluation() {
     }>>({})
 
     const [abstractVisible, setAbstractVisible] = React.useState<Record<number, boolean>>({})
-    const [attachmentsMap, setAttachmentsMap] = React.useState<Record<number, any[]>>({})
-    const [attachmentsLoadingMap, setAttachmentsLoadingMap] = React.useState<Record<number, boolean>>({})
 
     React.useEffect(() => {
         fetchRegistrations()
@@ -66,11 +64,7 @@ export default function CoordinatorEvaluation() {
     }
 
     const toggleAbstract = (id: number) => {
-        const next = !abstractVisible[id]
-        setAbstractVisible(s => ({ ...s, [id]: next }))
-        if (next) {
-            fetchAttachments(id)
-        }
+        setAbstractVisible(s => ({ ...s, [id]: !s[id] }))
     }
 
     const updateAssign = (id: number, patch: Partial<typeof assignState[number]>) => {
@@ -120,48 +114,6 @@ export default function CoordinatorEvaluation() {
         } catch (err) {
             console.error(err)
             updateAssign(id, { loading: false, error: "Scheduling failed" })
-        }
-    }
-
-    const fetchAttachments = async (regId: number) => {
-        setAttachmentsLoadingMap(m => ({ ...m, [regId]: true }))
-        try {
-            const resp = await fetch(`http://localhost:8000/registrations/${regId}/attachments`, {
-                headers: { "X-User-Email": user?.email || "" }
-            })
-            const json = await resp.json().catch(() => null)
-            if (resp.ok && Array.isArray(json.attachments)) {
-                setAttachmentsMap(m => ({ ...m, [regId]: json.attachments }))
-            } else {
-                setAttachmentsMap(m => ({ ...m, [regId]: [] }))
-            }
-        } catch (err) {
-            setAttachmentsMap(m => ({ ...m, [regId]: [] }))
-        } finally {
-            setAttachmentsLoadingMap(m => ({ ...m, [regId]: false }))
-        }
-    }
-
-    const downloadAttachment = async (attId: number, filename?: string) => {
-        try {
-            const resp = await fetch(`http://localhost:8000/attachments/${attId}/download`, {
-                headers: { "X-User-Email": user?.email || "" }
-            })
-            if (!resp.ok) {
-                console.warn('Download failed', resp.status)
-                return
-            }
-            const blob = await resp.blob()
-            const url = window.URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = filename || 'attachment'
-            document.body.appendChild(a)
-            a.click()
-            a.remove()
-            window.URL.revokeObjectURL(url)
-        } catch (err) {
-            console.error('Download error', err)
         }
     }
 
@@ -242,19 +194,17 @@ export default function CoordinatorEvaluation() {
                                         )}
                                     </td>
                                     <td className="p-2 align-top">
-                                            <div className="flex gap-2">
-                                                <Button onClick={() => openAssign(reg.id)} size="sm" variant={reg.defense ? "secondary" : "default"}>
-                                                    {reg.defense ? "Reassign" : "Assign"}
-                                                </Button>
-                                                {reg.status !== "registered" ? (
-                                                    <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
-                                                ) : (
-                                                    <div className="text-sm text-green-600 self-center">Verified</div>
-                                                )}
-                                                <Button variant="ghost" onClick={() => toggleAbstract(reg.id)} size="sm">
-                                                    {absVisible ? "Hide" : "View"}
-                                                </Button>
-                                            </div>
+                                        <div className="flex gap-2">
+                                            <Button onClick={() => openAssign(reg.id)} size="sm">Assign</Button>
+                                            {reg.status !== "registered" ? (
+                                                <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
+                                            ) : (
+                                                <div className="text-sm text-green-600 self-center">Verified</div>
+                                            )}
+                                            <Button variant="ghost" onClick={() => toggleAbstract(reg.id)} size="sm">
+                                                {absVisible ? "Hide" : "View"}
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
 
@@ -263,25 +213,6 @@ export default function CoordinatorEvaluation() {
                                         <td colSpan={7} className="p-3 bg-gray-50 text-sm whitespace-pre-wrap">
                                             <strong>Proposal abstract:</strong>
                                             <div className="mt-1">{reg.abstract || "(no abstract provided)"}</div>
-                                            <div className="mt-3">
-                                                <strong className="text-sm">Attachments:</strong>
-                                                <div className="mt-1">
-                                                    {attachmentsLoadingMap[reg.id] ? (
-                                                        <div className="text-sm">Loading attachments...</div>
-                                                    ) : !attachmentsMap[reg.id] || attachmentsMap[reg.id].length === 0 ? (
-                                                        <div className="text-sm text-muted-foreground">No attachments</div>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-2">
-                                                            {attachmentsMap[reg.id].map((a: any) => (
-                                                                <div key={a.id} className="flex items-center gap-2">
-                                                                    <div className="text-sm">{a.filename}</div>
-                                                                    <Button size="sm" onClick={() => downloadAttachment(a.id, a.filename)}>View / Download</Button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
                                         </td>
                                     </tr>
                                 )}
