@@ -5,10 +5,11 @@ import AppSidebar from "@/components/Sidebar"
 import CoordinatorPanel from "@/features/registration/CoordinatorPanel"
 import CoordinatorEvaluation from "@/features/Proposal_Evaluation/CoordinatorEvaluation"
 import CoordinatorScheduling from "@/features/Scheduling/CoordinatorScheduling"
+import CoordinatorProgressTracking from "@/features/ProgressTracking/CoordinatorProgressTracking"
 
 export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => void }) {
     // include 'schedule' view so the Sidebar's 'schedule' key can show the scheduling UI
-    const [view, setView] = React.useState<"home" | "registration" | "proposal" | "schedule">("home")
+    const [view, setView] = React.useState<"home" | "registration" | "proposal" | "schedule" | "progress">("home")
 
     return (
         <div className="flex h-screen">
@@ -21,6 +22,8 @@ export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => vo
                         ? setView("proposal")
                         : key === "schedule"
                         ? setView("schedule")
+                        : key === "progress"
+                        ? setView("progress")
                         : setView("home")
                 }
             />
@@ -38,6 +41,7 @@ export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => vo
                 {view === "registration" && <CoordinatorPanel />}
                 {view === "proposal" && <CoordinatorEvaluation />}
                 {view === "schedule" && <CoordinatorScheduling />}
+                {view === "progress" && <CoordinatorProgressTracking />}
             </main>
         </div>
     )
