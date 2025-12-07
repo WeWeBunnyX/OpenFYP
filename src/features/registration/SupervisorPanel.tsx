@@ -21,6 +21,9 @@ export default function SupervisorPanel() {
   const [actionRemarks, setActionRemarks] = React.useState<string>("")
   const [warnOpenId, setWarnOpenId] = React.useState<number | null>(null)
   const [warnText, setWarnText] = React.useState<string>("")
+  const [abstractVisible, setAbstractVisible] = React.useState<Record<number, boolean>>({})
+  const [attachmentsMap, setAttachmentsMap] = React.useState<Record<number, any[]>>({})
+  const [attachmentsLoadingMap, setAttachmentsLoadingMap] = React.useState<Record<number, boolean>>({})
 
   const load = async () => {
     const res = await fetch("http://localhost:8000/registrations", {
@@ -52,6 +55,51 @@ export default function SupervisorPanel() {
     setActionType(verb)
     setActionRemarks("")
     setActionOpen(true)
+  }
+
+  const toggleAbstract = (id: number) => {
+    const next = !abstractVisible[id]
+    setAbstractVisible(s => ({ ...s, [id]: next }))
+    if (next) fetchAttachments(id)
+  }
+
+  const fetchAttachments = async (regId: number) => {
+    setAttachmentsLoadingMap(m => ({ ...m, [regId]: true }))
+    try {
+      const resp = await fetch(`http://localhost:8000/registrations/${regId}/attachments`, {
+        headers: { "X-User-Email": user?.email || "" }
+      })
+      const json = await resp.json().catch(() => null)
+      if (resp.ok && Array.isArray(json.attachments)) {
+        setAttachmentsMap(m => ({ ...m, [regId]: json.attachments }))
+      } else {
+        setAttachmentsMap(m => ({ ...m, [regId]: [] }))
+      }
+    } catch (err) {
+      setAttachmentsMap(m => ({ ...m, [regId]: [] }))
+    } finally {
+      setAttachmentsLoadingMap(m => ({ ...m, [regId]: false }))
+    }
+  }
+
+  const downloadAttachment = async (attId: number, filename?: string) => {
+    try {
+      const resp = await fetch(`http://localhost:8000/attachments/${attId}/download`, {
+        headers: { "X-User-Email": user?.email || "" }
+      })
+      if (!resp.ok) return
+      const blob = await resp.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename || 'attachment'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      // ignore
+    }
   }
 
   const tryAction = (r: any, verb: "approve" | "reject") => {
@@ -159,6 +207,9 @@ export default function SupervisorPanel() {
                       >
                         Reject
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => toggleAbstract(r.id)}>
+                        {abstractVisible[r.id] ? "Hide" : "View"}
+                      </Button>
                     </div>
                     {warnOpenId === r.id && (
                       <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md flex justify-between items-center">
@@ -173,6 +224,33 @@ export default function SupervisorPanel() {
                     {r.history.map((h: any, i: number) => (
                       <div key={i}>{`${h.actor} — ${h.action} — ${h.note}`}</div>
                     ))}
+                  </div>
+                )}
+                {abstractVisible[r.id] && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                    <div>
+                      <strong>Proposal abstract:</strong>
+                      <div className="mt-1">{r.abstract || "(no abstract provided)"}</div>
+                    </div>
+                    <div className="mt-3">
+                      <strong className="text-sm">Attachments:</strong>
+                      <div className="mt-1">
+                        {attachmentsLoadingMap[r.id] ? (
+                          <div className="text-sm">Loading attachments...</div>
+                        ) : !attachmentsMap[r.id] || attachmentsMap[r.id].length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No attachments</div>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {attachmentsMap[r.id].map((a: any) => (
+                              <div key={a.id} className="flex items-center gap-2">
+                                <div className="text-sm">{a.filename}</div>
+                                <Button size="sm" onClick={() => downloadAttachment(a.id, a.filename)}>View / Download</Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
