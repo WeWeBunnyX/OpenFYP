@@ -109,6 +109,29 @@ class InterimScheduling(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ProposalEvaluation(SQLModel, table=True):
+        """Stores the coordinator-recorded outcome of a defense presentation (proposal evaluation).
+
+        Fields:
+            - registration_id: FK to Registration
+            - student_email: copy of the student's email for easy querying
+            - scheduled_start / scheduled_end: timestamps copied from Scheduling/Registration.defense
+            - status: 'pending' | 'evaluated'
+            - result: 'approved' | 'rejected' (nullable until evaluated)
+            - remarks: optional remarks provided by coordinator
+        """
+        id: Optional[int] = Field(default=None, primary_key=True)
+        registration_id: Optional[int] = None
+        student_email: Optional[str] = None
+        scheduled_start: Optional[datetime] = None
+        scheduled_end: Optional[datetime] = None
+        status: str = Field(default="pending")
+        result: Optional[str] = None
+        remarks: Optional[str] = None
+        created_at: datetime = Field(default_factory=datetime.utcnow)
+        updated_at: Optional[datetime] = None
+
+
 def get_session():
     with Session(engine) as session:
         yield session
@@ -574,6 +597,26 @@ def create_schedule(data: dict, response: Response, x_user_email: str = Header(N
             created.append(sched)
             updated_regs.append(reg)
 
+            # create or update ProposalEvaluation row for this scheduled registration
+            try:
+                pe = session.exec(select(ProposalEvaluation).where(ProposalEvaluation.registration_id == reg.id)).first()
+                if not pe:
+                    pe = ProposalEvaluation(
+                        registration_id=reg.id,
+                        student_email=reg.owner,
+                        scheduled_start=sched_start,
+                        scheduled_end=sched_end,
+                        status="pending",
+                    )
+                    session.add(pe)
+                else:
+                    pe.scheduled_start = sched_start
+                    pe.scheduled_end = sched_end
+                    # keep result/status if already evaluated
+                    session.add(pe)
+            except Exception as e:
+                print("Failed to create/update ProposalEvaluation:", e)
+
             # advance current_start only when slot length is provided
             if slot_mins and slot_mins > 0:
                 current_start = sched_end
@@ -750,6 +793,103 @@ def list_interim_schedules(x_user_email: str = Header(None, alias="X-User-Email"
         }
 
     return {"interim_schedules": [map_row(s) for s in rows]}
+
+
+@app.get("/proposal_evaluations")
+def list_proposal_evaluations(x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """Return proposal evaluation rows. Scoped by role:
+      - Coordinator: all
+      - Student: only evaluations for their registrations
+      - Supervisor: evaluations for registrations they supervise
+    """
+    user = session.get(User, x_user_email)
+    if not user:
+        return {"proposal_evaluations": []}
+
+    try:
+        if user.role == "Coordinator":
+            rows = session.exec(select(ProposalEvaluation)).all()
+        elif user.role == "Student":
+            rows = session.exec(select(ProposalEvaluation).where(ProposalEvaluation.student_email == x_user_email)).all()
+        elif user.role == "Supervisor":
+            # join to Registration to filter by supervisor
+            rows = session.exec(select(ProposalEvaluation).join(Registration, ProposalEvaluation.registration_id == Registration.id).where(Registration.supervisor == x_user_email)).all()
+        else:
+            rows = []
+    except Exception as e:
+        print("Error listing proposal evaluations:", e)
+        rows = []
+
+    def map_row(e: ProposalEvaluation):
+        return {
+            "id": e.id,
+            "registration_id": e.registration_id,
+            "student_email": e.student_email,
+            "scheduled_start": e.scheduled_start.isoformat() if e.scheduled_start else None,
+            "scheduled_end": e.scheduled_end.isoformat() if e.scheduled_end else None,
+            "status": e.status,
+            "result": e.result,
+            "remarks": e.remarks,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+        }
+
+    return {"proposal_evaluations": [map_row(r) for r in rows]}
+
+
+@app.patch("/proposal_evaluations/{pe_id}")
+def patch_proposal_evaluation(pe_id: int, data: dict = Body(None), response: Response = None, x_user_email: str = Header(None, alias="X-User-Email"), session: Session = Depends(get_session)):
+    """Coordinator endpoint to record committee decision (result + remarks) for a ProposalEvaluation."""
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can record evaluation results"}
+
+    pe = session.get(ProposalEvaluation, pe_id)
+    if not pe:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "ProposalEvaluation not found"}
+
+    # only allow editing if the registration is assigned/scheduled
+    reg = session.get(Registration, pe.registration_id) if pe.registration_id else None
+    if not reg:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Associated registration not found"}
+
+    if not (reg.defense or reg.status in ("scheduled", "registered")):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Can only record evaluations for assigned or scheduled registrations"}
+
+    # validate input
+    result = None
+    remarks = None
+    if isinstance(data, dict):
+        result = data.get("result")
+        remarks = data.get("remarks")
+
+    if result not in ("approved", "rejected"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Invalid result; must be 'approved' or 'rejected'"}
+
+    pe.result = result
+    pe.remarks = remarks
+    pe.status = "evaluated"
+    pe.updated_at = datetime.utcnow()
+    session.add(pe)
+
+    # update registration history and notify student
+    reg.history = reg.history or []
+    note = f"Proposal {result} by committee"
+    if remarks:
+        note = f"{note}: {remarks}"
+    reg.history.append({"actor": x_user_email, "action": "evaluated", "note": note, "at": datetime.utcnow().isoformat()})
+    session.add(reg)
+
+    push_notification_db(session, reg.owner, f"Your proposal '{reg.title}' was {result} by committee. Remarks: {remarks or ''}")
+
+    session.commit()
+    session.refresh(pe)
+    return {"message": "Saved", "proposal_evaluation": {"id": pe.id, "registration_id": pe.registration_id, "result": pe.result, "remarks": pe.remarks, "status": pe.status, "updated_at": pe.updated_at.isoformat() if pe.updated_at else None}}
 
 
 @app.delete("/registrations/{reg_id}")

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
+import { Textarea } from "@/components/ui/textarea"
 
 type Registration = {
     id: number
@@ -16,6 +17,19 @@ type Registration = {
         end: string
         committee: string[]
     }
+}
+
+type ProposalEvaluation = {
+    id: number
+    registration_id?: number
+    student_email?: string
+    scheduled_start?: string
+    scheduled_end?: string
+    status?: string
+    result?: string
+    remarks?: string
+    created_at?: string
+    updated_at?: string
 }
 
 export default function CoordinatorEvaluation() {
@@ -43,11 +57,73 @@ export default function CoordinatorEvaluation() {
     const [abstractVisible, setAbstractVisible] = React.useState<Record<number, boolean>>({})
     const [attachmentsMap, setAttachmentsMap] = React.useState<Record<number, any[]>>({})
     const [attachmentsLoadingMap, setAttachmentsLoadingMap] = React.useState<Record<number, boolean>>({})
+    const [evaluations, setEvaluations] = React.useState<ProposalEvaluation[]>([])
+    const [evaluationDrafts, setEvaluationDrafts] = React.useState<Record<number, {
+        result?: string
+        remarks?: string
+        loading?: boolean
+        error?: string | null
+        success?: string | null
+    }>>({})
 
     React.useEffect(() => {
         fetchRegistrations()
+        fetchEvaluations()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.email])
+
+    const fetchEvaluations = async () => {
+        try {
+            const resp = await fetch("http://localhost:8000/proposal_evaluations", { headers: { "X-User-Email": user?.email || "" } })
+            if (!resp.ok) throw new Error(`Failed to load evaluations (${resp.status})`)
+            const body = await resp.json()
+            const all: ProposalEvaluation[] = body.proposal_evaluations || body || []
+            setEvaluations(all)
+            const drafts: typeof evaluationDrafts = {}
+            all.forEach(ev => {
+                drafts[ev.id] = { result: ev.result || undefined, remarks: ev.remarks || undefined }
+            })
+            setEvaluationDrafts(drafts)
+        } catch (err) {
+            console.warn('Failed to fetch evaluations', err)
+            setEvaluations([])
+        }
+    }
+
+    const updateDraft = (id: number, patch: Partial<typeof evaluationDrafts[number]>) => {
+        setEvaluationDrafts(s => ({ ...s, [id]: { ...(s[id] || {}), ...patch } }))
+    }
+
+    const submitEvaluation = async (id: number) => {
+        const draft = evaluationDrafts[id]
+        if (!draft || !draft.result) {
+            toast.error('Select a result (approved or rejected)')
+            return
+        }
+        updateDraft(id, { loading: true, error: null, success: null })
+        try {
+            const resp = await fetch(`http://localhost:8000/proposal_evaluations/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-User-Email': user?.email || '' },
+                body: JSON.stringify({ result: draft.result, remarks: draft.remarks || '' })
+            })
+            const data = await resp.json().catch(() => null)
+            if (!resp.ok) {
+                const msg = data?.message || resp.statusText
+                updateDraft(id, { loading: false, error: msg })
+                toast.error(`Save failed: ${msg}`)
+            } else {
+                updateDraft(id, { loading: false, success: 'Saved' })
+                toast.success('Evaluation saved')
+                await fetchEvaluations()
+                await fetchRegistrations()
+            }
+        } catch (err) {
+            console.error('Submit evaluation failed', err)
+            updateDraft(id, { loading: false, error: 'Request failed' })
+            toast.error('Save failed: request error')
+        }
+    }
 
     const fetchRegistrations = async () => {
         setLoading(true)
@@ -136,6 +212,12 @@ export default function CoordinatorEvaluation() {
                 toast.success("Defense schedule saved")
                 // refresh list so defense info appears
                 await fetchRegistrations()
+                // also refresh evaluation records which are created when scheduling
+                try {
+                    await fetchEvaluations()
+                } catch (e) {
+                    console.warn('Failed to refresh evaluations after scheduling', e)
+                }
             }
         } catch (err) {
             console.error(err)
@@ -425,6 +507,66 @@ export default function CoordinatorEvaluation() {
                         })}
                     </tbody>
                 </table>
+            </div>
+
+            <div className="mt-6">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold">Record / View Evaluations</h3>
+                    <div>
+                        <Button size="sm" onClick={fetchEvaluations}>Refresh</Button>
+                    </div>
+                </div>
+                {evaluations.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No evaluations to record</div>
+                ) : (
+                    <div className="space-y-3">
+                        {evaluations.map(ev => {
+                            const reg = registrations.find(r => r.id === ev.registration_id)
+                            const draft = evaluationDrafts[ev.id] || {}
+                            return (
+                                <div key={ev.id} className="p-3 border rounded-md">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="font-medium">{reg ? reg.title : `Registration #${ev.registration_id}`}</div>
+                                            <div className="text-sm text-muted-foreground">Student: {ev.student_email}</div>
+                                            <div className="text-sm text-muted-foreground">Scheduled: {ev.scheduled_start ? new Date(ev.scheduled_start).toLocaleString() : '-'}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            {ev.status === 'evaluated' ? (
+                                                <div className="text-sm">Status: <strong>{ev.result === 'approved' ? 'Approved' : 'Rejected'}</strong></div>
+                                            ) : (
+                                                <div className="text-sm">Status: <strong>Pending</strong></div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="md:col-span-1">
+                                            <Label className="text-sm">Result</Label>
+                                            <select className="w-full mt-1 p-2 border rounded" value={draft.result || (ev.result || '')} onChange={(e) => updateDraft(ev.id, { result: e.target.value })}>
+                                                <option value="">-- select --</option>
+                                                <option value="approved">Proposal Accepted</option>
+                                                <option value="rejected">Proposal Rejected</option>
+                                            </select>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <Label className="text-sm">Remarks (optional)</Label>
+                                            <Textarea placeholder="Enter remarks for the student" value={draft.remarks ?? (ev.remarks ?? '')} onChange={(e) => updateDraft(ev.id, { remarks: e.target.value })} />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 flex items-center gap-2">
+                                        <Button onClick={() => submitEvaluation(ev.id)} disabled={draft.loading}>
+                                            {draft.loading ? 'Saving…' : (ev.status === 'evaluated' ? 'Update' : 'Save')}
+                                        </Button>
+                                        {draft.error && <div className="text-red-600 text-sm">{draft.error}</div>}
+                                        {draft.success && <div className="text-green-600 text-sm">{draft.success}</div>}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     )
