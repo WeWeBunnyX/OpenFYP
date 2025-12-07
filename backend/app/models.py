@@ -90,6 +90,22 @@ class ProposalEvaluation(SQLModel, table=True):
     updated_at: Optional[datetime] = None
 
 
+class ProgressLog(SQLModel, table=True):
+    """Progress logs uploaded by students for sequential tracking.
+
+    Fields mirror the frontend contract in `StudentProgressTracking.tsx`.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner: str
+    slot: int
+    title: Optional[str] = None
+    description: str
+    file_path: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 def get_session():
     with Session(engine) as session:
         yield session

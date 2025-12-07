@@ -18,6 +18,7 @@ from sqlmodel import SQLModel, Session, select
 from .models import engine, User
 from .routes_registrations import router as registrations_router
 from .routes_scheduling_evaluation import router as scheduling_router
+from .routes_progress import router as progress_router
 
 
 APP_TITLE = os.getenv("APP_TITLE", "OpenFYP Backend")
@@ -42,6 +43,7 @@ def read_root():
 
 app.include_router(registrations_router)
 app.include_router(scheduling_router)
+app.include_router(progress_router)
 
 
 @app.on_event("startup")

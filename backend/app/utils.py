@@ -7,6 +7,35 @@ from typing import Optional
 from sqlmodel import Session
 from .models import Notification
 import os
+from fastapi import UploadFile
+
+
+async def save_upload_file(upload_file: UploadFile) -> dict:
+    """Save a Starlette/FastAPI `UploadFile` to the configured upload directory.
+
+    Returns a dict with `filename`, `filepath`, and `mime_type`.
+    Raises `ValueError` for invalid extensions or sizes.
+    """
+    allowed_ext = {".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".zip", ".rar"}
+    upload_dir = Path(os.getenv("UPLOAD_DIR", "./backend/uploads"))
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    original_name = upload_file.filename or "upload"
+    ext = Path(original_name).suffix.lower()
+    if ext not in allowed_ext:
+        raise ValueError("Invalid file extension")
+
+    contents = await upload_file.read()
+    # size limit 10MB
+    if len(contents) > 10 * 1024 * 1024:
+        raise ValueError("File too large")
+
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    dest = upload_dir / unique_name
+    dest.write_bytes(contents)
+
+    mime_type, _ = mimetypes.guess_type(original_name)
+    return {"filename": original_name, "filepath": str(dest.resolve()), "mime_type": mime_type}
 
 
 def push_notification_db(session: Session, email: str, message: str):
