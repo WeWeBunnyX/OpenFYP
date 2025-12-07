@@ -62,6 +62,13 @@ export default function SupervisorPanel() {
       return
     }
 
+    // If trying to reject an already approved registration, show a warning instead
+    if (verb === "reject" && r.status === "approved") {
+      setWarnText("This registration has already been approved by the supervisor — rejection is not allowed.")
+      setWarnOpenId(r.id)
+      return
+    }
+
     // Prevent opening dialog for redundant approve/reject
     if (verb === "approve" && r.status === "approved") return
     if (verb === "reject" && r.status === "rejected") return
