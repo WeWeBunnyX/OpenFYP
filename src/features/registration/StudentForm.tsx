@@ -38,6 +38,7 @@ export default function StudentForm() {
   const [submittedRegistration, setSubmittedRegistration] = React.useState<any | null>(null)
   const [registrations, setRegistrations] = React.useState<any[]>([])
   const [selectedRegistrationId, setSelectedRegistrationId] = React.useState<number | null>(null)
+  const [isCreating, setIsCreating] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [attachments, setAttachments] = React.useState<any[]>([])
   const [attachmentsLoading, setAttachmentsLoading] = React.useState(false)
@@ -66,29 +67,34 @@ export default function StudentForm() {
         headers: { "X-User-Email": user.email },
       })
       const json = await res.json()
-      if (res.ok && Array.isArray(json.registrations)) {
-        const regs = json.registrations
-        setRegistrations(regs)
-        if (selectedRegistrationId) {
-          const sel = regs.find((r: any) => r.id === selectedRegistrationId)
-          if (sel) {
-            setSubmittedRegistration(sel)
-          } else if (regs.length > 0) {
-            setSelectedRegistrationId(regs[0].id)
-            setSubmittedRegistration(regs[0])
+        if (res.ok && Array.isArray(json.registrations)) {
+          const regs = json.registrations
+          setRegistrations(regs)
+          if (selectedRegistrationId) {
+            const sel = regs.find((r: any) => r.id === selectedRegistrationId)
+            if (sel) {
+              setSubmittedRegistration(sel)
+            } else if (regs.length > 0) {
+              setSelectedRegistrationId(regs[0].id)
+              setSubmittedRegistration(regs[0])
+            } else {
+              setSelectedRegistrationId(null)
+              setSubmittedRegistration(null)
+            }
           } else {
-            setSelectedRegistrationId(null)
-            setSubmittedRegistration(null)
+            // if the user is creating a new registration, don't auto-select the first item
+            if (isCreating) {
+              // keep submittedRegistration/select as null so the create form remains visible
+              return
+            }
+            if (regs.length > 0) {
+              setSelectedRegistrationId(regs[0].id)
+              setSubmittedRegistration(regs[0])
+            } else {
+              setSelectedRegistrationId(null)
+              setSubmittedRegistration(null)
+            }
           }
-        } else {
-          if (regs.length > 0) {
-            setSelectedRegistrationId(regs[0].id)
-            setSubmittedRegistration(regs[0])
-          } else {
-            setSelectedRegistrationId(null)
-            setSubmittedRegistration(null)
-          }
-        }
       }
     } catch (e) {
       // ignore
@@ -131,8 +137,7 @@ export default function StudentForm() {
       fetchRegistrations()
     }, 8000)
     return () => clearInterval(iv)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.email, selectedRegistrationId])
+  }, [user?.email, selectedRegistrationId, isCreating])
 
   const submit = async () => {
     setLoading(true)
@@ -158,6 +163,7 @@ export default function StudentForm() {
         if (data.registration) {
           setSubmittedRegistration(data.registration)
           setSelectedRegistrationId(data.registration.id)
+          setIsCreating(false)
         }
       } else {
         setMessage(data.message || "Submission failed")
@@ -375,7 +381,17 @@ export default function StudentForm() {
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-sm font-medium">Your Registrations</div>
                 <div className="ml-2">
-                  <Button size="sm" className="shrink-0" variant="outline" onClick={() => { setSelectedRegistrationId(null); setSubmittedRegistration(null); }}>New</Button>
+                  <Button size="sm" className="shrink-0" variant="outline" onClick={() => {
+                    // enter create mode
+                    setIsCreating(true)
+                    setSelectedRegistrationId(null)
+                    setSubmittedRegistration(null)
+                    setTitle("")
+                    setSupervisor("")
+                    setAbstract("")
+                    setFileName(null)
+                    setFileData(null)
+                  }}>New</Button>
                 </div>
               </div>
               {loading ? (
@@ -386,10 +402,10 @@ export default function StudentForm() {
                 <ul className="space-y-2">
                   {registrations.map((r) => (
                     <li key={r.id}>
-                      <button
-                        className={`w-full text-left p-2 rounded ${selectedRegistrationId === r.id ? 'bg-accent' : 'hover:bg-muted'}`}
-                        onClick={() => { setSelectedRegistrationId(r.id); setSubmittedRegistration(r); }}
-                      >
+                        <button
+                          className={`w-full text-left p-2 rounded ${selectedRegistrationId === r.id ? 'bg-accent' : 'hover:bg-muted'}`}
+                          onClick={() => { setSelectedRegistrationId(r.id); setSubmittedRegistration(r); setIsCreating(false); }}
+                        >
                         <div className="font-medium">{r.title}</div>
                         <div className="text-xs text-muted-foreground">{r.supervisor}</div>
                       </button>
@@ -438,7 +454,18 @@ export default function StudentForm() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button onClick={submit}>Submit Registration</Button>
+                    <div className="flex gap-2">
+                      <Button onClick={submit}>Submit Registration</Button>
+                      <Button variant="outline" onClick={() => {
+                        // cancel creating
+                        setIsCreating(false)
+                        setTitle("")
+                        setSupervisor("")
+                        setAbstract("")
+                        setFileName(null)
+                        setFileData(null)
+                      }}>Cancel</Button>
+                    </div>
                   </CardFooter>
                 </>
               ) : (
