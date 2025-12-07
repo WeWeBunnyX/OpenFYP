@@ -360,6 +360,11 @@ def approve_registration(reg_id: int, data: dict = Body(None), response: Respons
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
+    # Supervisors must not approve registrations that have already been verified or scheduled by a coordinator
+    if reg.status in ("registered", "scheduled"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Cannot approve a registration that has been verified or scheduled"}
+
     # optional remarks provided by supervisor — overwrite if key present (allow empty string)
     remarks = None
     if isinstance(data, dict) and "remarks" in data:
@@ -396,6 +401,11 @@ def reject_registration(reg_id: int, data: dict = Body(None), response: Response
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
 
+    # Supervisors must not reject registrations that have already been verified or scheduled by a coordinator
+    if reg.status in ("registered", "scheduled"):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return {"message": "Cannot reject a registration that has been verified or scheduled"}
+
     # optional remarks provided by supervisor — overwrite if key present (allow empty string)
     remarks = None
     if isinstance(data, dict) and "remarks" in data:
@@ -428,10 +438,9 @@ def verify_registration(reg_id: int, response: Response, x_user_email: str = Hea
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"message": "Not found"}
     # Only allow verification if the supervisor has approved the registration
-    # or if the registration was already scheduled (coordinator may verify scheduled items)
-    if reg.status not in ("approved", "scheduled"):
+    if reg.status != "approved":
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return {"message": "Only registrations approved by a supervisor (or scheduled) can be verified"}
+        return {"message": "Only registrations approved by a supervisor can be verified"}
 
     reg.status = "registered"
     reg.history = reg.history or []

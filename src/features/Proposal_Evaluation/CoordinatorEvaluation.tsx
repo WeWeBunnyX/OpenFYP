@@ -314,11 +314,11 @@ export default function CoordinatorEvaluation() {
                                                     <div className="text-sm text-red-600 italic self-center">Rejected proposals cannot be verified</div>
                                                 ) : (
                                                     <div className="flex items-center gap-2">
-                                                        {(reg.status === "approved" || reg.status === "scheduled" || reg.defense) && (
+                                                        {reg.status === "approved" && (
                                                             <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
                                                         )}
 
-                                                        {reg.status === "scheduled" || (reg.defense && !(reg.status === "registered")) ? (
+                                                        {(reg.status === "scheduled" || (reg.defense && !(reg.status === "registered"))) ? (
                                                             <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 border border-teal-200 text-teal-800">Scheduled</div>
                                                         ) : null}
 

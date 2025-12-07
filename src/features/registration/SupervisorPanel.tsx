@@ -19,6 +19,8 @@ export default function SupervisorPanel() {
   const [actionRegId, setActionRegId] = React.useState<number | null>(null)
   const [actionType, setActionType] = React.useState<"approve" | "reject" | null>(null)
   const [actionRemarks, setActionRemarks] = React.useState<string>("")
+  const [warnOpenId, setWarnOpenId] = React.useState<number | null>(null)
+  const [warnText, setWarnText] = React.useState<string>("")
 
   const load = async () => {
     const res = await fetch("http://localhost:8000/registrations", {
@@ -50,6 +52,21 @@ export default function SupervisorPanel() {
     setActionType(verb)
     setActionRemarks("")
     setActionOpen(true)
+  }
+
+  const tryAction = (r: any, verb: "approve" | "reject") => {
+    // If registration is already verified or scheduled, show inline warning instead of opening dialog
+    if (r.status === "registered" || r.status === "scheduled") {
+      setWarnText("This registration has been verified or scheduled by a coordinator and cannot be changed by a supervisor.")
+      setWarnOpenId(r.id)
+      return
+    }
+
+    // Prevent opening dialog for redundant approve/reject
+    if (verb === "approve" && r.status === "approved") return
+    if (verb === "reject" && r.status === "rejected") return
+
+    openAction(r.id, verb)
   }
 
   const confirmAction = async () => {
@@ -117,9 +134,9 @@ export default function SupervisorPanel() {
                       {/* Approve button: disabled/outlined when already approved */}
                       <Button
                         size="sm"
-                        onClick={() => openAction(r.id, "approve")}
+                        onClick={() => tryAction(r, "approve")}
                         disabled={r.status === "approved"}
-                        variant={r.status === "approved" ? "outline" : "default"}
+                        variant={r.status === "approved" ? "outline" : (r.status === "registered" || r.status === "scheduled" ? "outline" : "default")}
                         aria-pressed={r.status === "approved"}
                       >
                         Approve
@@ -128,14 +145,20 @@ export default function SupervisorPanel() {
                       {/* Reject button: destructive when actionable, outlined when already rejected */}
                       <Button
                         size="sm"
-                        onClick={() => openAction(r.id, "reject")}
+                        onClick={() => tryAction(r, "reject")}
                         disabled={r.status === "rejected"}
-                        variant={r.status === "rejected" ? "outline" : "destructive"}
+                        variant={r.status === "rejected" ? "outline" : (r.status === "registered" || r.status === "scheduled" ? "outline" : "destructive")}
                         aria-pressed={r.status === "rejected"}
                       >
                         Reject
                       </Button>
                     </div>
+                    {warnOpenId === r.id && (
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-md flex justify-between items-center">
+                        <div className="text-sm">{warnText}</div>
+                        <Button variant="outline" size="sm" onClick={() => setWarnOpenId(null)}>OK</Button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {r.history && (

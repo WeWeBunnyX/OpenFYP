@@ -35,6 +35,8 @@ export default function CoordinatorPanel() {
         return "Pending Approval"
       case "approved":
         return "Approved (awaiting verification)"
+      case "scheduled":
+        return "Scheduled"
       case "registered":
         return "Registered"
       case "rejected":
@@ -133,7 +135,11 @@ export default function CoordinatorPanel() {
                     </>
                   )}
 
-                  {r.status !== "approved" && r.status !== "registered" && (
+                  {r.status === "scheduled" && (
+                    <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 border border-teal-200 text-teal-800">Scheduled</div>
+                  )}
+
+                  {r.status !== "approved" && r.status !== "registered" && r.status !== "scheduled" && (
                     <Button onClick={() => handleMark(r)}>Mark as Verified</Button>
                   )}
                 </div>
