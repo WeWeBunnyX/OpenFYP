@@ -103,6 +103,7 @@ class ProgressLog(SQLModel, table=True):
     file_path: Optional[str] = None
     mime_type: Optional[str] = None
     file_url: Optional[str] = None
+    sign_status: str = Field(default="pending")  # "pending" or "signed"
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

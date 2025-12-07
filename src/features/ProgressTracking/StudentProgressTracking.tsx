@@ -24,6 +24,7 @@ type ProgressLog = {
   title?: string | null;
   description: string;
   fileUrl?: string | null;
+  signStatus?: string; // "pending" or "signed"
   submittedAt?: string; // ISO
 };
 
@@ -114,6 +115,7 @@ function SlotForm({
           title: title.trim() || null,
           description: description.trim(),
           fileUrl: null,
+          signStatus: "pending",
           submittedAt: new Date().toISOString(),
         };
       }
@@ -185,6 +187,21 @@ function SlotForm({
             className="min-h-[96px]"
           />
         </div>
+
+        {isCompleted && existing?.signStatus && (
+          <div className="text-sm">
+            <label className="text-sm font-medium">Supervisor Sign Status:</label>
+            <span
+              className={`ml-2 inline-block px-2 py-1 rounded text-xs font-semibold ${
+                existing.signStatus === "signed"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-yellow-100 text-yellow-800"
+              }`}
+            >
+              {existing.signStatus === "signed" ? "✓ Signed" : "⏳ Pending"}
+            </span>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <Button type="submit" disabled={disabled || isCompleted || saving}>

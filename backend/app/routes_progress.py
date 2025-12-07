@@ -26,6 +26,7 @@ def list_progress_logs(owner: str, session: Session = Depends(get_session)):
             "title": r.title,
             "description": r.description,
             "fileUrl": r.file_url or (f"/api/progress/logs/{r.id}/download" if r.id else None),
+            "signStatus": r.sign_status,
             "submittedAt": r.created_at.isoformat() if r.created_at else None,
         }
 
@@ -85,6 +86,51 @@ async def create_progress_log(
         "title": log.title,
         "description": log.description,
         "fileUrl": log.file_url,
+        "signStatus": log.sign_status,
+        "submittedAt": log.created_at.isoformat() if log.created_at else None,
+    }
+
+
+@router.get("/api/progress/logs/supervisor")
+def list_all_progress_logs(session: Session = Depends(get_session)):
+    """Return all progress logs (for supervisor/admin viewing)."""
+    rows = session.exec(select(ProgressLog).order_by(ProgressLog.owner, ProgressLog.slot)).all()
+
+    def map_row(r: ProgressLog):
+        return {
+            "id": r.id,
+            "owner": r.owner,
+            "slot": r.slot,
+            "title": r.title,
+            "description": r.description,
+            "fileUrl": r.file_url or (f"/api/progress/logs/{r.id}/download" if r.id else None),
+            "signStatus": r.sign_status,
+            "submittedAt": r.created_at.isoformat() if r.created_at else None,
+        }
+
+    return [map_row(r) for r in rows]
+
+
+@router.patch("/api/progress/logs/{log_id}/sign")
+def sign_progress_log(log_id: int, session: Session = Depends(get_session)):
+    """Mark a progress log as signed by supervisor."""
+    log = session.get(ProgressLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    log.sign_status = "signed"
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+
+    return {
+        "id": log.id,
+        "owner": log.owner,
+        "slot": log.slot,
+        "title": log.title,
+        "description": log.description,
+        "fileUrl": log.file_url,
+        "signStatus": log.sign_status,
         "submittedAt": log.created_at.isoformat() if log.created_at else None,
     }
 
