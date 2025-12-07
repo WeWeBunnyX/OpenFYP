@@ -97,10 +97,15 @@ function SlotForm({
 
       let saved: ProgressLog | null = null;
       try {
-        const res = await fetch("/api/progress/logs", { method: "POST", body: form });
-        if (!res.ok) throw new Error(await res.text());
+        const res = await fetch("http://localhost:8000/api/progress/logs", { method: "POST", body: form });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error("POST /api/progress/logs failed:", res.status, errText);
+          throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
         saved = await res.json();
-      } catch {
+      } catch (err) {
+        console.error("Failed to POST to /api/progress/logs:", err);
         // Fallback: store minimal record in localStorage
         saved = {
           id: `${owner}-${index}`,
@@ -213,7 +218,7 @@ export default function StudentProgressTracking() {
         setLoading(true);
         let data: ProgressLog[] | null = null;
         try {
-          const res = await fetch(`/api/progress/logs?owner=${encodeURIComponent(owner)}`);
+          const res = await fetch(`http://localhost:8000/api/progress/logs?owner=${encodeURIComponent(owner)}`);
           if (!res.ok) throw new Error("Load failed");
           data = await res.json();
         } catch {
