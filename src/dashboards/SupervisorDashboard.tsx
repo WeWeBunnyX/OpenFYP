@@ -4,9 +4,10 @@ import SupervisorPanel from "@/features/registration/SupervisorPanel"
 import SupervisorScheduling from "@/features/Scheduling/SupervisorScheduling"
 import SupervisorEvaluation from "@/features/Proposal_Evaluation/SupervisorEvaluation"
 import SupervisorProgressTracking from "@/features/ProgressTracking/SupervisorProgressTracking"
+import SupervisorEvalGrading from "@/features/EvaluationandGrading/SupervisorEvalGrading"
 
 export default function SupervisorDashboard(props: { onLogout?: () => void }) {
-  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress">("home")
+  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading">("home")
 
   return (
     <div className="flex h-screen">
@@ -17,6 +18,7 @@ export default function SupervisorDashboard(props: { onLogout?: () => void }) {
           if (key === "schedule") return setView("schedule")
           if (key === "proposal") return setView("proposal")
           if (key === "progress") return setView("progress")
+          if (key === "grading") return setView("grading")
           return setView("home")
         }}
       />
@@ -34,6 +36,7 @@ export default function SupervisorDashboard(props: { onLogout?: () => void }) {
         {view === "schedule" && <SupervisorScheduling />}
         {view === "proposal" && <SupervisorEvaluation />}
         {view === "progress" && <SupervisorProgressTracking />}
+        {view === "grading" && <SupervisorEvalGrading />}
       </main>
     </div>
   )
