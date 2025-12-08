@@ -107,6 +107,26 @@ class ProgressLog(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ProgressGrading(SQLModel, table=True):
+    """Supervisor evaluations of student progress (every 15 days, months 1-7).
+    
+    Stores weighted scores and feedback from supervisors for student progress evaluations.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    student_email: str
+    student_name: str
+    project_title: str
+    supervisor_email: str
+    supervisor_name: str
+    evaluation_month: int  # 1-7
+    evaluation_week: int  # 1-2 (15-day periods)
+    criteria: List[dict] = Field(sa_column=Column(JSON), default_factory=list)  # [{"name": ..., "weight": ..., "score": ..., "feedback": ...}]
+    overall_feedback: str
+    final_score: int  # weighted score 0-100
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+
 def get_session():
     with Session(engine) as session:
         yield session

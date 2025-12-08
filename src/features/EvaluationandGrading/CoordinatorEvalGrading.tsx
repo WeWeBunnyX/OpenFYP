@@ -1,5 +1,5 @@
 /* eslint-disable import/no-unused-modules */
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -36,163 +36,64 @@ type StudentEvaluations = {
   evaluations: EvaluationRecord[];
 };
 
-// Mock data - in real app, fetch from API
-const MOCK_STUDENTS: StudentEvaluations[] = [
-  {
-    studentEmail: "student@example.com",
-    studentName: "Ahmed Ali",
-    projectTitle: "AI Chat Bot",
-    evaluations: [
-      {
-        id: 1,
-        supervisorName: "Dr. Ahmed Khan",
-        supervisorEmail: "supervisor@example.com",
-        evaluationMonth: 1,
-        evaluationWeek: 2,
-        submittedDate: "2025-01-15",
-        criteria: [
-          {
-            name: "Code Quality & Implementation",
-            weight: 25,
-            score: 82,
-            feedback: "Good initial implementation. Code is well-structured but needs better error handling.",
-          },
-          {
-            name: "Progress & Work Completion",
-            weight: 25,
-            score: 85,
-            feedback: "Excellent progress in the first two weeks. Completed core requirements on schedule.",
-          },
-          {
-            name: "Problem-Solving & Innovation",
-            weight: 20,
-            score: 78,
-            feedback: "Shows good understanding. Consider exploring more innovative solutions.",
-          },
-          {
-            name: "Documentation & Communication",
-            weight: 15,
-            score: 88,
-            feedback: "Very clear documentation and code comments.",
-          },
-          {
-            name: "Collaboration & Professionalism",
-            weight: 15,
-            score: 90,
-            feedback: "Excellent communication in meetings. Always prepared.",
-          },
-        ],
-        overallFeedback: "Excellent start! Strong technical skills and great communication. Keep maintaining momentum.",
-        finalScore: 84,
-      },
-      {
-        id: 2,
-        supervisorName: "Dr. Ahmed Khan",
-        supervisorEmail: "supervisor@example.com",
-        evaluationMonth: 2,
-        evaluationWeek: 1,
-        submittedDate: "2025-02-15",
-        criteria: [
-          {
-            name: "Code Quality & Implementation",
-            weight: 25,
-            score: 86,
-            feedback: "Significant improvement. Error handling is now robust.",
-          },
-          {
-            name: "Progress & Work Completion",
-            weight: 25,
-            score: 84,
-            feedback: "On track with timeline. API endpoints and database schema completed.",
-          },
-          {
-            name: "Problem-Solving & Innovation",
-            weight: 20,
-            score: 81,
-            feedback: "Good approach. Database optimization is efficient.",
-          },
-          {
-            name: "Documentation & Communication",
-            weight: 15,
-            score: 89,
-            feedback: "API documentation is comprehensive.",
-          },
-          {
-            name: "Collaboration & Professionalism",
-            weight: 15,
-            score: 92,
-            feedback: "Outstanding collaboration during code reviews.",
-          },
-        ],
-        overallFeedback: "Continued excellent performance. Consistent growth in technical skills.",
-        finalScore: 86,
-      },
-    ],
-  },
-  {
-    studentEmail: "student2@example.com",
-    studentName: "Fatima Khan",
-    projectTitle: "Mobile App",
-    evaluations: [
-      {
-        id: 3,
-        supervisorName: "Dr. Zainab Hassan",
-        supervisorEmail: "supervisor2@example.com",
-        evaluationMonth: 1,
-        evaluationWeek: 2,
-        submittedDate: "2025-01-18",
-        criteria: [
-          {
-            name: "Code Quality & Implementation",
-            weight: 25,
-            score: 79,
-            feedback: "Good foundation. Some architectural improvements suggested.",
-          },
-          {
-            name: "Progress & Work Completion",
-            weight: 25,
-            score: 80,
-            feedback: "Good progress. UI mockups completed as planned.",
-          },
-          {
-            name: "Problem-Solving & Innovation",
-            weight: 20,
-            score: 82,
-            feedback: "Shows creative thinking in UX design.",
-          },
-          {
-            name: "Documentation & Communication",
-            weight: 15,
-            score: 85,
-            feedback: "Good design documentation provided.",
-          },
-          {
-            name: "Collaboration & Professionalism",
-            weight: 15,
-            score: 88,
-            feedback: "Cooperative and receptive to feedback.",
-          },
-        ],
-        overallFeedback: "Solid start with good creative approach. Focus on code architecture and best practices.",
-        finalScore: 82,
-      },
-    ],
-  },
-];
-
 export default function CoordinatorEvalGrading() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentEvaluations | null>(null);
   const [expandedEvaluation, setExpandedEvaluation] = useState<number | null>(null);
   const [expandedCriteria, setExpandedCriteria] = useState<string | null>(null);
+  const [students, setStudents] = useState<StudentEvaluations[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch all student evaluations from backend
+  useEffect(() => {
+    const fetchEvaluations = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(
+          "http://localhost:8000/api/evaluations/coordinator/all-students"
+        );
+        
+        if (!response.ok) throw new Error("Failed to load evaluations");
+        
+        const data = await response.json();
+        
+        // Transform API response to component format
+        const transformedData = data.map((student: any) => ({
+          studentEmail: student.studentEmail,
+          studentName: student.studentName,
+          projectTitle: student.projectTitle,
+          evaluations: student.evaluations.map((evaluation: any) => ({
+            id: evaluation.id,
+            supervisorName: evaluation.supervisorName,
+            supervisorEmail: evaluation.supervisorEmail,
+            evaluationMonth: evaluation.evaluationMonth,
+            evaluationWeek: evaluation.evaluationWeek,
+            submittedDate: new Date(evaluation.submittedAt).toLocaleDateString(),
+            criteria: evaluation.criteria,
+            overallFeedback: evaluation.overallFeedback,
+            finalScore: evaluation.finalScore,
+          })),
+        }));
+        
+        setStudents(transformedData);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to load evaluations";
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvaluations();
+  }, []);
 
   const filteredStudents = useMemo(() => {
-    return MOCK_STUDENTS.filter((student) =>
+    return students.filter((student) =>
       student.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.studentEmail.includes(searchTerm) ||
       student.projectTitle.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [searchTerm]);
+  }, [searchTerm, students]);
 
   const getScoreColor = (score: number) => {
     if (score >= 85) return "text-green-600";
@@ -212,6 +113,10 @@ export default function CoordinatorEvalGrading() {
     const total = evaluations.reduce((sum, e) => sum + e.finalScore, 0);
     return Math.round(total / evaluations.length);
   };
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading evaluations...</div>;
+  }
 
   return (
     <div className="space-y-6">

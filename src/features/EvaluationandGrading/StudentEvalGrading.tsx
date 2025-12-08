@@ -36,110 +36,34 @@ export default function StudentEvalGrading() {
   const [selectedEval, setSelectedEval] = useState<EvaluationResult | null>(null);
   const [expandedCriteria, setExpandedCriteria] = useState<string | null>(null);
 
-  // Mock data - in real app, fetch from API
-  const mockEvaluations: EvaluationResult[] = [
-    {
-      id: 1,
-      supervisorName: "Dr. Ahmed Khan",
-      supervisorEmail: "supervisor@example.com",
-      evaluationMonth: 1,
-      evaluationWeek: 2,
-      submittedDate: "2025-01-15",
-      criteria: [
-        {
-          name: "Code Quality & Implementation",
-          weight: 25,
-          score: 82,
-          feedback: "Good initial implementation. Code is well-structured but needs better error handling in edge cases.",
-        },
-        {
-          name: "Progress & Work Completion",
-          weight: 25,
-          score: 85,
-          feedback: "Excellent progress in the first two weeks. You've completed the core requirements on schedule.",
-        },
-        {
-          name: "Problem-Solving & Innovation",
-          weight: 20,
-          score: 78,
-          feedback: "Shows good understanding of the problem domain. Consider exploring more innovative solutions for the data layer.",
-        },
-        {
-          name: "Documentation & Communication",
-          weight: 15,
-          score: 88,
-          feedback: "Very clear documentation and code comments. Great technical writing skills demonstrated.",
-        },
-        {
-          name: "Collaboration & Professionalism",
-          weight: 15,
-          score: 90,
-          feedback: "Excellent communication in meetings. Always prepared and asks clarifying questions.",
-        },
-      ],
-      overallFeedback:
-        "Excellent start to the project! You're demonstrating strong technical skills and excellent communication. Keep maintaining the momentum and focus on edge case handling. Great progress!",
-      finalScore: 84,
-    },
-    {
-      id: 2,
-      supervisorName: "Dr. Ahmed Khan",
-      supervisorEmail: "supervisor@example.com",
-      evaluationMonth: 2,
-      evaluationWeek: 1,
-      submittedDate: "2025-02-15",
-      criteria: [
-        {
-          name: "Code Quality & Implementation",
-          weight: 25,
-          score: 86,
-          feedback: "Significant improvement in code quality. Error handling is now robust. Consider adding unit tests for better coverage.",
-        },
-        {
-          name: "Progress & Work Completion",
-          weight: 25,
-          score: 84,
-          feedback: "On track with the timeline. Completed API endpoints and database schema as planned.",
-        },
-        {
-          name: "Problem-Solving & Innovation",
-          weight: 20,
-          score: 81,
-          feedback: "Good problem-solving approach. Database optimization is efficient.",
-        },
-        {
-          name: "Documentation & Communication",
-          weight: 15,
-          score: 89,
-          feedback: "API documentation is comprehensive. Good use of inline comments.",
-        },
-        {
-          name: "Collaboration & Professionalism",
-          weight: 15,
-          score: 92,
-          feedback: "Outstanding collaboration during code reviews. Very receptive to feedback.",
-        },
-      ],
-      overallFeedback:
-        "Continued excellent performance. You're showing consistent growth in technical skills. Focus on implementing unit tests to improve code reliability. Keep up the great work!",
-      finalScore: 86,
-    },
-  ];
-
   useEffect(() => {
-    const run = async () => {
+    const fetchEvaluations = async () => {
       try {
         setLoading(true);
-        // TODO: Fetch from backend
-        // const res = await fetch(`http://localhost:8000/api/evaluations?student=${user?.email}`);
-        // if (!res.ok) throw new Error("Failed to load evaluations");
-        // const data = await res.json();
-        // setEvaluations(data);
-
-        // Use mock data for now
-        setEvaluations(mockEvaluations);
-        if (mockEvaluations.length > 0) {
-          setSelectedEval(mockEvaluations[0]);
+        const response = await fetch(
+          `http://localhost:8000/api/evaluations/student/${user?.email}`
+        );
+        
+        if (!response.ok) throw new Error("Failed to load evaluations");
+        
+        const data = await response.json();
+        
+        // Transform API response to component format
+        const transformedData = data.map((evaluation: any) => ({
+          id: evaluation.id,
+          supervisorName: evaluation.supervisorName,
+          supervisorEmail: evaluation.supervisorEmail,
+          evaluationMonth: evaluation.evaluationMonth,
+          evaluationWeek: evaluation.evaluationWeek,
+          submittedDate: new Date(evaluation.submittedAt).toLocaleDateString(),
+          criteria: evaluation.criteria,
+          overallFeedback: evaluation.overallFeedback,
+          finalScore: evaluation.finalScore,
+        }));
+        
+        setEvaluations(transformedData);
+        if (transformedData.length > 0) {
+          setSelectedEval(transformedData[0]);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to load evaluations";
@@ -148,7 +72,10 @@ export default function StudentEvalGrading() {
         setLoading(false);
       }
     };
-    run();
+
+    if (user?.email) {
+      fetchEvaluations();
+    }
   }, [user?.email]);
 
   const getScoreColor = (score: number) => {

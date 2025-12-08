@@ -1,5 +1,5 @@
 /* eslint-disable import/no-unused-modules */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type CriterionScore = {
   name: string;
@@ -40,6 +41,8 @@ const DEFAULT_CRITERIA: CriterionScore[] = [
 ];
 
 export default function SupervisorEvalGrading() {
+  const { user } = useAuth();
+  
   const [form, setForm] = useState<EvaluationForm>({
     studentEmail: "",
     studentName: "",
@@ -54,18 +57,41 @@ export default function SupervisorEvalGrading() {
   const [expandedCriteria, setExpandedCriteria] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [students, setStudents] = useState<Array<{ email: string; name: string; projectTitle: string }>>([]);
 
-  // Mock student list - in real app, fetch from API
-  const mockStudents = [
-    { email: "student@example.com", name: "Ahmed Ali", projectTitle: "AI Chat Bot" },
-    { email: "student2@example.com", name: "Fatima Khan", projectTitle: "Mobile App" },
-  ];
+  // Fetch students from backend (students who have registrations)
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        setLoadingStudents(true);
+        const response = await fetch("http://localhost:8000/api/registrations/students");
+        if (!response.ok) throw new Error("Failed to fetch students");
+        const data = await response.json();
+        
+        // Transform registration data to student list format
+        const studentsList = data.map((registration: any) => ({
+          email: registration.email,
+          name: registration.name,
+          projectTitle: registration.projectTitle,
+        }));
+        setStudents(studentsList);
+      } catch (err) {
+        console.error("Error fetching students:", err);
+        toast.error("Failed to load students list");
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
 
-  const filteredStudents = mockStudents.filter((s) =>
+    fetchStudents();
+  }, []);
+
+  const filteredStudents = students.filter((s) =>
     s.email.includes(studentSearch) || s.name.toLowerCase().includes(studentSearch.toLowerCase())
   );
 
-  const selectStudent = (student: typeof mockStudents[0]) => {
+  const selectStudent = (student: typeof students[0]) => {
     setForm({
       ...form,
       studentEmail: student.email,
@@ -99,15 +125,34 @@ export default function SupervisorEvalGrading() {
       return;
     }
 
+    if (!form.overallFeedback.trim()) {
+      toast.error("Please provide overall feedback");
+      return;
+    }
+
     setSaving(true);
     try {
-      // TODO: POST to backend endpoint
-      // const res = await fetch("http://localhost:8000/api/evaluations", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(form),
-      // });
-      // if (!res.ok) throw new Error("Failed to submit evaluation");
+      const response = await fetch("http://localhost:8000/api/evaluations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_email: form.studentEmail,
+          student_name: form.studentName,
+          project_title: form.projectTitle,
+          supervisor_email: user?.email || "",
+          supervisor_name: user?.name || "",
+          evaluation_month: form.evaluationMonth,
+          evaluation_week: form.evaluationWeek,
+          criteria: form.criteria,
+          overall_feedback: form.overallFeedback,
+          final_score: calculateWeightedScore(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to submit evaluation");
+      }
 
       toast.success("Evaluation submitted successfully");
       // Reset form
@@ -120,6 +165,7 @@ export default function SupervisorEvalGrading() {
         criteria: DEFAULT_CRITERIA,
         overallFeedback: "",
       });
+      setPreview(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to submit evaluation";
       toast.error(msg);
