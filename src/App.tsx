@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Toaster } from "@/components/ui/sonner"
 import CoordinatorDashboard from "@/dashboards/CoordinatorDashboard"
 import StudentDashboard from "@/dashboards/StudentDashboard"
 import SupervisorDashboard from "@/dashboards/SupervisorDashboard"
@@ -76,6 +77,7 @@ function AppInner() {
 export default function App() {
     return (
         <AuthProvider>
+            <Toaster />
             <AppInner />
         </AuthProvider>
     )

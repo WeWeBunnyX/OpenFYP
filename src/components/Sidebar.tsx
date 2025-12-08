@@ -114,10 +114,10 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
                     {m.key === "grading" && (
                       <SidebarMenuSub>
                         <SidebarMenuSubButton href="#" size="md">
-                          Interim Rubrics
+                          Interim Evaluation
                         </SidebarMenuSubButton>
                         <SidebarMenuSubButton href="#" size="md">
-                          Final Vivas
+                          Final Evaluation & Vivas
                         </SidebarMenuSubButton>
                       </SidebarMenuSub>
                     )}
