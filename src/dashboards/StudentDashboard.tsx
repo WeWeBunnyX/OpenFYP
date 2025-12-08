@@ -4,9 +4,10 @@ import StudentForm from "@/features/registration/StudentForm"
 import StudentScheduling from "@/features/Scheduling/StudentScheduling"
 import StudentEvaluation from "@/features/Proposal_Evaluation/StudentEvaluation"
 import StudentProgressTracking from "@/features/ProgressTracking/StudentProgressTracking"
+import StudentEvalGrading from "@/features/EvaluationandGrading/StudentEvalGrading"
 
 export default function StudentDashboard(props: { onLogout?: () => void }) {
-  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress">("home")
+  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading">("home")
 
   return (
     <div className="flex h-screen">
@@ -21,6 +22,8 @@ export default function StudentDashboard(props: { onLogout?: () => void }) {
             ? setView("proposal")
             : key === "progress"
             ? setView("progress")
+            : key === "grading"
+            ? setView("grading")
             : setView("home")
         }
       />
@@ -38,6 +41,7 @@ export default function StudentDashboard(props: { onLogout?: () => void }) {
         {view === "schedule" && <StudentScheduling />}
         {view === "proposal" && <StudentEvaluation />}
         {view === "progress" && <StudentProgressTracking />}
+        {view === "grading" && <StudentEvalGrading />}
       </main>
     </div>
   )
