@@ -1,10 +1,16 @@
-/* eslint-disable import/no-unused-modules */
 import React, { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -218,6 +224,9 @@ export default function StudentProgressTracking() {
   const owner = user?.email ?? "";
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEvalDialog, setShowEvalDialog] = useState(false);
+  const [evalMessage, setEvalMessage] = useState("");
+  const [evalLoading, setEvalLoading] = useState(false);
 
   // Determine which next slot should be unlocked: first incomplete slot
   const completedSlots = useMemo(() => new Set(logs.map((l) => l.slot)), [logs]);
@@ -267,6 +276,25 @@ export default function StudentProgressTracking() {
     });
   };
 
+  const handleLearnMore = async () => {
+    setEvalLoading(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/progress/interim-eligibility?owner=${encodeURIComponent(owner)}`);
+      if (!res.ok) {
+        throw new Error("Failed to check eligibility");
+      }
+      const data = await res.json();
+      setEvalMessage(data.message || "You have successfully uploaded all 24 logs and will be notified for interim evaluation!");
+      setShowEvalDialog(true);
+    } catch (err) {
+      // Fallback message if API fails
+      setEvalMessage("Congratulations! You have successfully uploaded all 24 logs and are now eligible to register for interim evaluation. Your coordinator will schedule your evaluation soon.");
+      setShowEvalDialog(true);
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
   const grid = useMemo(() => {
     const items: { slot: number; existing?: ProgressLog | null }[] = [];
     for (let i = 1; i <= TOTAL_SLOTS; i++) {
@@ -307,9 +335,10 @@ export default function StudentProgressTracking() {
           <div className="flex items-center justify-between">
             <div className="font-medium">Ready for Interim Evaluation</div>
             <Button
-              onClick={() => toast.info("Your coordinator will schedule the interim evaluation.")}
+              onClick={handleLearnMore}
+              disabled={evalLoading}
             >
-              Learn more
+              {evalLoading ? "Checking..." : "Learn more"}
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
@@ -317,6 +346,23 @@ export default function StudentProgressTracking() {
           </p>
         </Card>
       )}
+
+      {/* Interim Evaluation Dialog */}
+      <Dialog open={showEvalDialog} onOpenChange={setShowEvalDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Interim Evaluation Eligibility</DialogTitle>
+            <DialogDescription className="pt-4">
+              {evalMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => setShowEvalDialog(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

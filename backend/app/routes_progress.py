@@ -146,3 +146,29 @@ def download_progress_file(log_id: int, session: Session = Depends(get_session))
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(path=str(p), filename=Path(log.file_path).name, media_type=log.mime_type or "application/octet-stream")
+
+
+@router.get("/api/progress/interim-eligibility")
+def check_interim_eligibility(owner: str, session: Session = Depends(get_session)):
+    """Check if a student has uploaded all 24 logs and is eligible for interim evaluation."""
+    if not owner:
+        raise HTTPException(status_code=400, detail="Owner email required")
+
+    rows = session.exec(select(ProgressLog).where(ProgressLog.owner == owner)).all()
+    completed_slots = set(r.slot for r in rows if 1 <= r.slot <= 24)
+    total_completed = len(completed_slots)
+
+    if total_completed >= 24:
+        return {
+            "eligible": True,
+            "completedLogs": total_completed,
+            "message": "Congratulations! You have successfully uploaded all 24 progress logs and are now eligible to register for interim evaluation. Your coordinator will be notified and will schedule your evaluation soon. Please keep an eye on the Scheduling section for your assigned evaluation time."
+        }
+    else:
+        missing = 24 - total_completed
+        return {
+            "eligible": False,
+            "completedLogs": total_completed,
+            "message": f"You have completed {total_completed} out of 24 logs. Please upload {missing} more log(s) to become eligible for interim evaluation."
+        }
+
