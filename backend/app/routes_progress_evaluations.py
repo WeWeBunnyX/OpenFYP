@@ -2,50 +2,62 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select, desc
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 from .models import ProgressGrading, get_session, Session
 
 router = APIRouter()
 
 
+# Request models
+class EvaluationCreate(BaseModel):
+    student_email: str
+    student_name: str
+    project_title: str
+    supervisor_email: str
+    supervisor_name: str
+    evaluation_month: int
+    evaluation_week: int
+    criteria: List[dict]
+    overall_feedback: str
+    final_score: int
+
+
+class EvaluationUpdate(BaseModel):
+    criteria: Optional[List[dict]] = None
+    overall_feedback: Optional[str] = None
+    final_score: Optional[int] = None
+
+
 @router.post("/api/evaluations")
 def create_evaluation(
-    student_email: str,
-    student_name: str,
-    project_title: str,
-    supervisor_email: str,
-    supervisor_name: str,
-    evaluation_month: int,
-    evaluation_week: int,
-    criteria: List[dict],
-    overall_feedback: str,
-    final_score: int,
+    evaluation: EvaluationCreate,
     session: Session = Depends(get_session),
 ):
     """Create a new evaluation record."""
-    if evaluation_month < 1 or evaluation_month > 7:
+    if evaluation.evaluation_month < 1 or evaluation.evaluation_month > 7:
         raise HTTPException(status_code=400, detail="Evaluation month must be between 1 and 7")
-    if evaluation_week < 1 or evaluation_week > 2:
+    if evaluation.evaluation_week < 1 or evaluation.evaluation_week > 2:
         raise HTTPException(status_code=400, detail="Evaluation week must be 1 or 2")
-    if final_score < 0 or final_score > 100:
+    if evaluation.final_score < 0 or evaluation.final_score > 100:
         raise HTTPException(status_code=400, detail="Final score must be between 0 and 100")
 
     # Check if evaluation for this student, month, week already exists
     existing = session.exec(
         select(ProgressGrading).where(
-            (ProgressGrading.student_email == student_email)
-            & (ProgressGrading.evaluation_month == evaluation_month)
-            & (ProgressGrading.evaluation_week == evaluation_week)
+            (ProgressGrading.student_email == evaluation.student_email)
+            & (ProgressGrading.evaluation_month == evaluation.evaluation_month)
+            & (ProgressGrading.evaluation_week == evaluation.evaluation_week)
         )
     ).first()
 
     if existing:
         # Update existing evaluation
-        existing.supervisor_email = supervisor_email
-        existing.supervisor_name = supervisor_name
-        existing.criteria = criteria
-        existing.overall_feedback = overall_feedback
-        existing.final_score = final_score
+        existing.supervisor_email = evaluation.supervisor_email
+        existing.supervisor_name = evaluation.supervisor_name
+        existing.criteria = evaluation.criteria
+        existing.overall_feedback = evaluation.overall_feedback
+        existing.final_score = evaluation.final_score
         existing.updated_at = datetime.utcnow()
         session.add(existing)
         session.commit()
@@ -66,35 +78,35 @@ def create_evaluation(
         }
 
     # Create new evaluation
-    evaluation = ProgressGrading(
-        student_email=student_email,
-        student_name=student_name,
-        project_title=project_title,
-        supervisor_email=supervisor_email,
-        supervisor_name=supervisor_name,
-        evaluation_month=evaluation_month,
-        evaluation_week=evaluation_week,
-        criteria=criteria,
-        overall_feedback=overall_feedback,
-        final_score=final_score,
+    db_evaluation = ProgressGrading(
+        student_email=evaluation.student_email,
+        student_name=evaluation.student_name,
+        project_title=evaluation.project_title,
+        supervisor_email=evaluation.supervisor_email,
+        supervisor_name=evaluation.supervisor_name,
+        evaluation_month=evaluation.evaluation_month,
+        evaluation_week=evaluation.evaluation_week,
+        criteria=evaluation.criteria,
+        overall_feedback=evaluation.overall_feedback,
+        final_score=evaluation.final_score,
     )
-    session.add(evaluation)
+    session.add(db_evaluation)
     session.commit()
-    session.refresh(evaluation)
+    session.refresh(db_evaluation)
 
     return {
-        "id": evaluation.id,
-        "studentEmail": evaluation.student_email,
-        "studentName": evaluation.student_name,
-        "projectTitle": evaluation.project_title,
-        "supervisorEmail": evaluation.supervisor_email,
-        "supervisorName": evaluation.supervisor_name,
-        "evaluationMonth": evaluation.evaluation_month,
-        "evaluationWeek": evaluation.evaluation_week,
-        "criteria": evaluation.criteria,
-        "overallFeedback": evaluation.overall_feedback,
-        "finalScore": evaluation.final_score,
-        "submittedAt": evaluation.submitted_at.isoformat() if evaluation.submitted_at else None,
+        "id": db_evaluation.id,
+        "studentEmail": db_evaluation.student_email,
+        "studentName": db_evaluation.student_name,
+        "projectTitle": db_evaluation.project_title,
+        "supervisorEmail": db_evaluation.supervisor_email,
+        "supervisorName": db_evaluation.supervisor_name,
+        "evaluationMonth": db_evaluation.evaluation_month,
+        "evaluationWeek": db_evaluation.evaluation_week,
+        "criteria": db_evaluation.criteria,
+        "overallFeedback": db_evaluation.overall_feedback,
+        "finalScore": db_evaluation.final_score,
+        "submittedAt": db_evaluation.submitted_at.isoformat() if db_evaluation.submitted_at else None,
     }
 
 
@@ -259,9 +271,7 @@ def get_all_students_evaluations(session: Session = Depends(get_session)):
 @router.patch("/api/evaluations/{evaluation_id}")
 def update_evaluation(
     evaluation_id: int,
-    criteria: Optional[List[dict]] = None,
-    overall_feedback: Optional[str] = None,
-    final_score: Optional[int] = None,
+    update_data: EvaluationUpdate,
     session: Session = Depends(get_session),
 ):
     """Update an evaluation (for supervisor edits)."""
@@ -269,14 +279,14 @@ def update_evaluation(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation not found")
 
-    if criteria is not None:
-        evaluation.criteria = criteria
-    if overall_feedback is not None:
-        evaluation.overall_feedback = overall_feedback
-    if final_score is not None:
-        if final_score < 0 or final_score > 100:
+    if update_data.criteria is not None:
+        evaluation.criteria = update_data.criteria
+    if update_data.overall_feedback is not None:
+        evaluation.overall_feedback = update_data.overall_feedback
+    if update_data.final_score is not None:
+        if update_data.final_score < 0 or update_data.final_score > 100:
             raise HTTPException(status_code=400, detail="Final score must be between 0 and 100")
-        evaluation.final_score = final_score
+        evaluation.final_score = update_data.final_score
 
     evaluation.updated_at = datetime.utcnow()
     session.add(evaluation)

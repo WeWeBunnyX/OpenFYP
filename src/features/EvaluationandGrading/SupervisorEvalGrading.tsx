@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -60,20 +61,30 @@ export default function SupervisorEvalGrading() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [students, setStudents] = useState<Array<{ email: string; name: string; projectTitle: string }>>([]);
 
-  // Fetch students from backend (students who have registrations)
+  // Fetch students whose proposal defense was accepted
   useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoadingStudents(true);
-        const response = await fetch("http://localhost:8000/api/registrations/students");
-        if (!response.ok) throw new Error("Failed to fetch students");
+        // Fetch all registrations
+        const response = await fetch("http://localhost:8000/registrations", {
+          headers: { "X-User-Email": user?.email || "" }
+        });
+        if (!response.ok) throw new Error("Failed to fetch registrations");
         const data = await response.json();
         
-        // Transform registration data to student list format
-        const studentsList = data.map((registration: any) => ({
-          email: registration.email,
-          name: registration.name,
-          projectTitle: registration.projectTitle,
+        // Filter for students whose defense was accepted (status should be "accepted" or defense is scheduled)
+        const registrations = data.registrations || data || [];
+        const acceptedStudents = registrations.filter((reg: any) => {
+          // Include if defense has been scheduled/completed or status is accepted
+          return reg.defense && (reg.defense.start || reg.status === "accepted");
+        });
+        
+        // Transform to student list format
+        const studentsList = acceptedStudents.map((registration: any) => ({
+          email: registration.owner, // owner is the student email
+          name: registration.title?.split(" - ")[0] || registration.owner, // extract name from title if available
+          projectTitle: registration.title || "",
         }));
         setStudents(studentsList);
       } catch (err) {
@@ -84,8 +95,10 @@ export default function SupervisorEvalGrading() {
       }
     };
 
-    fetchStudents();
-  }, []);
+    if (user?.email) {
+      fetchStudents();
+    }
+  }, [user?.email]);
 
   const filteredStudents = students.filter((s) =>
     s.email.includes(studentSearch) || s.name.toLowerCase().includes(studentSearch.toLowerCase())
@@ -115,52 +128,70 @@ export default function SupervisorEvalGrading() {
   };
 
   const handleSubmit = async () => {
+    console.log("handleSubmit called");
+    console.log("Form state:", form);
+    console.log("User:", user);
+    
     if (!form.studentEmail || !form.studentName) {
       toast.error("Please select a student");
+      console.log("Validation failed: student not selected");
       return;
     }
 
     if (form.criteria.some((c) => c.score === 0)) {
       toast.error("Please score all criteria");
+      console.log("Validation failed: criteria not scored");
       return;
     }
 
     if (!form.overallFeedback.trim()) {
       toast.error("Please provide overall feedback");
+      console.log("Validation failed: no feedback");
       return;
     }
 
+    console.log("All validations passed, attempting to submit...");
     setSaving(true);
     try {
+      const payload = {
+        student_email: form.studentEmail,
+        student_name: form.studentName,
+        project_title: form.projectTitle,
+        supervisor_email: user?.email || "",
+        supervisor_name: user?.name || "",
+        evaluation_month: form.evaluationMonth,
+        evaluation_week: form.evaluationWeek,
+        criteria: form.criteria,
+        overall_feedback: form.overallFeedback,
+        final_score: calculateWeightedScore(),
+      };
+      
+      console.log("Payload:", payload);
+      
       const response = await fetch("http://localhost:8000/api/evaluations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_email: form.studentEmail,
-          student_name: form.studentName,
-          project_title: form.projectTitle,
-          supervisor_email: user?.email || "",
-          supervisor_name: user?.name || "",
-          evaluation_month: form.evaluationMonth,
-          evaluation_week: form.evaluationWeek,
-          criteria: form.criteria,
-          overall_feedback: form.overallFeedback,
-          final_score: calculateWeightedScore(),
-        }),
+        body: JSON.stringify(payload),
       });
 
+      console.log("Response status:", response.status);
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error("Error response:", errorData);
         throw new Error(errorData.detail || "Failed to submit evaluation");
       }
 
+      const responseData = await response.json();
+      console.log("Success response:", responseData);
       toast.success("Evaluation submitted successfully");
-      // Reset form
+      
+      // Reset only the evaluation data, keep the student selected for submitting other month evaluations
       setForm({
-        studentEmail: "",
-        studentName: "",
-        projectTitle: "",
-        evaluationMonth: 1,
+        studentEmail: form.studentEmail,
+        studentName: form.studentName,
+        projectTitle: form.projectTitle,
+        evaluationMonth: form.evaluationMonth === 7 ? 1 : form.evaluationMonth + 1, // Auto-increment month
         evaluationWeek: 1,
         criteria: DEFAULT_CRITERIA,
         overallFeedback: "",
@@ -168,6 +199,7 @@ export default function SupervisorEvalGrading() {
       setPreview(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to submit evaluation";
+      console.error("Caught error:", msg, err);
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -243,7 +275,13 @@ export default function SupervisorEvalGrading() {
             >
               Edit
             </Button>
-            <Button onClick={handleSubmit} disabled={saving}>
+            <Button 
+              onClick={() => {
+                console.log("Submit button clicked!");
+                handleSubmit();
+              }} 
+              disabled={saving}
+            >
               {saving ? "Submitting..." : "Submit Evaluation"}
             </Button>
           </div>
@@ -257,40 +295,52 @@ export default function SupervisorEvalGrading() {
       <div>
         <h2 className="text-xl font-semibold">Regular Progress Evaluations (Every 15 Days)</h2>
         <p className="text-sm text-muted-foreground">
-          Record and submit project progress evaluations for your students up to Month 6-7.
+          Record and submit project progress evaluations for students whose proposal defenses were accepted (Month 1 through Month 6-7).
         </p>
         <p className="text-xs text-blue-600 mt-2">
-          📋 Note: Interim and Final evaluations are managed by the Coordinator. Your responsibility is to evaluate student progress every 15 days during the regular project period.
+          📋 Note: Only students with accepted proposal defenses appear below. Interim and Final evaluations are managed by the Coordinator. Your responsibility is to evaluate student progress every 15 days during the regular project period.
         </p>
       </div>
 
       {/* Student Selection */}
       <Card className="p-4">
-        <h3 className="font-semibold mb-3">Select Student</h3>
+        <h3 className="font-semibold mb-3">Select Student (Accepted Defenses Only)</h3>
         {!form.studentEmail ? (
           <div className="space-y-3">
-            <Input
-              placeholder="Search by name or email..."
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-              className="mb-2"
-            />
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {filteredStudents.map((student) => (
-                <Button
-                  key={student.email}
-                  variant="outline"
-                  className="w-full justify-start text-left h-auto py-2"
-                  onClick={() => selectStudent(student)}
-                >
-                  <div>
-                    <p className="font-medium">{student.name}</p>
-                    <p className="text-xs text-muted-foreground">{student.email}</p>
-                    <p className="text-xs text-blue-600">{student.projectTitle}</p>
-                  </div>
-                </Button>
-              ))}
-            </div>
+            {students.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-3 bg-blue-50 rounded border border-blue-200">
+                📋 No students with accepted proposal defenses yet. Once the coordinator accepts student defenses, they will appear here.
+              </p>
+            ) : (
+              <>
+                <Input
+                  placeholder="Search by name or email..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="mb-2"
+                />
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {filteredStudents.length === 0 ? (
+                    <p className="text-xs text-muted-foreground p-2">No students match your search</p>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <Button
+                        key={student.email}
+                        variant="outline"
+                        className="w-full justify-start text-left h-auto py-2"
+                        onClick={() => selectStudent(student)}
+                      >
+                        <div>
+                          <p className="font-medium">{student.name}</p>
+                          <p className="text-xs text-muted-foreground">{student.email}</p>
+                          <p className="text-xs text-blue-600">{student.projectTitle}</p>
+                        </div>
+                      </Button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-between p-3 bg-green-50 rounded border border-green-200">
@@ -450,6 +500,27 @@ export default function SupervisorEvalGrading() {
               className="min-h-32"
             />
           </Card>
+
+          {/* Validation Alert */}
+          {(form.criteria.some((c) => c.score === 0) || !form.overallFeedback.trim()) && (
+            <Alert className="border-orange-300 bg-orange-50">
+              <AlertDescription className="text-orange-800">
+                <p className="font-semibold mb-2">⚠️ Missing Information</p>
+                <ul className="space-y-1 text-sm">
+                  {form.criteria.some((c) => c.score === 0) && (
+                    <li>
+                      • Score all criteria:
+                      {form.criteria
+                        .map((c, i) => (c.score === 0 ? c.name : null))
+                        .filter(Boolean)
+                        .join(", ")}
+                    </li>
+                  )}
+                  {!form.overallFeedback.trim() && <li>• Provide overall feedback</li>}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-3 justify-end">
