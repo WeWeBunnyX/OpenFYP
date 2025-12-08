@@ -24,7 +24,8 @@ type EvaluationForm = {
   studentEmail: string;
   studentName: string;
   projectTitle: string;
-  evaluationPeriod: string;
+  evaluationMonth: number; // 1-7 (months into the project)
+  evaluationWeek: number; // which 15-day period
   criteria: CriterionScore[];
   overallFeedback: string;
   submittedAt?: string;
@@ -43,7 +44,8 @@ export default function SupervisorEvalGrading() {
     studentEmail: "",
     studentName: "",
     projectTitle: "",
-    evaluationPeriod: "mid-semester",
+    evaluationMonth: 1,
+    evaluationWeek: 1,
     criteria: DEFAULT_CRITERIA,
     overallFeedback: "",
   });
@@ -113,7 +115,8 @@ export default function SupervisorEvalGrading() {
         studentEmail: "",
         studentName: "",
         projectTitle: "",
-        evaluationPeriod: "mid-semester",
+        evaluationMonth: 1,
+        evaluationWeek: 1,
         criteria: DEFAULT_CRITERIA,
         overallFeedback: "",
       });
@@ -151,7 +154,7 @@ export default function SupervisorEvalGrading() {
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Evaluation Period</label>
-              <p className="text-lg capitalize">{form.evaluationPeriod}</p>
+              <p className="text-lg">Month {form.evaluationMonth}, Week {form.evaluationWeek}</p>
             </div>
           </div>
 
@@ -206,9 +209,12 @@ export default function SupervisorEvalGrading() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Submit Progress Evaluation</h2>
+        <h2 className="text-xl font-semibold">Regular Progress Evaluations (Every 15 Days)</h2>
         <p className="text-sm text-muted-foreground">
-          Record and submit project progress evaluations for your students.
+          Record and submit project progress evaluations for your students up to Month 6-7.
+        </p>
+        <p className="text-xs text-blue-600 mt-2">
+          📋 Note: Interim and Final evaluations are managed by the Coordinator. Your responsibility is to evaluate student progress every 15 days during the regular project period.
         </p>
       </div>
 
@@ -271,19 +277,36 @@ export default function SupervisorEvalGrading() {
           <Card className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Evaluation Period</Label>
-                <Select value={form.evaluationPeriod} onValueChange={(v) => setForm({ ...form, evaluationPeriod: v })}>
+                <Label>Evaluation Month (1-7)</Label>
+                <Select value={String(form.evaluationMonth)} onValueChange={(v) => setForm({ ...form, evaluationMonth: parseInt(v) })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mid-semester">Mid-Semester</SelectItem>
-                    <SelectItem value="final">Final</SelectItem>
-                    <SelectItem value="interim">Interim</SelectItem>
+                    {[1, 2, 3, 4, 5, 6, 7].map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        Month {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>15-Day Evaluation Period</Label>
+                <Select value={String(form.evaluationWeek)} onValueChange={(v) => setForm({ ...form, evaluationWeek: parseInt(v) })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Period 1 (Days 1-15)</SelectItem>
+                    <SelectItem value="2">Period 2 (Days 16-30)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Supervisors evaluate student progress every 15 days. Evaluations are collected up to Month 6-7, after which Interim and Final evaluations are managed by Coordinators.
+            </p>
           </Card>
 
           {/* Scoring Criteria with Collapsible Sections */}
@@ -391,7 +414,8 @@ export default function SupervisorEvalGrading() {
                   studentEmail: "",
                   studentName: "",
                   projectTitle: "",
-                  evaluationPeriod: "mid-semester",
+                  evaluationMonth: 1,
+                  evaluationWeek: 1,
                   criteria: DEFAULT_CRITERIA,
                   overallFeedback: "",
                 })
