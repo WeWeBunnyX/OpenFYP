@@ -8,9 +8,10 @@ import StudentProgressTracking from "@/features/ProgressTracking/StudentProgress
 import StudentEvalGrading from "@/features/EvaluationandGrading/StudentEvalGrading"
 import StudentInterimEval from "@/features/Interim_Evaluation/StudentInterimEval"
 import StudentFinalEvalViva from "@/features/FinalEvaluationandVivas/StudentFinalEvalViva"
+import UsersAndRoles from "@/features/UsersAndRoles/UsersAndRoles"
 
 export default function StudentDashboard(props: { onLogout?: () => void }) {
-  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading" | "interim" | "final">("home")
+  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading" | "interim" | "final" | "users">("home")
 
   const handleNavigate = (key: string) => {
     if (key === "registration") setView("registration")
@@ -20,6 +21,7 @@ export default function StudentDashboard(props: { onLogout?: () => void }) {
     else if (key === "grading") setView("grading")
     else if (key === "interim") setView("interim")
     else if (key === "final") setView("final")
+    else if (key === "users") setView("users")
     else setView("home")
   }
 
@@ -38,6 +40,7 @@ export default function StudentDashboard(props: { onLogout?: () => void }) {
         {view === "grading" && <StudentEvalGrading />}
         {view === "interim" && <StudentInterimEval />}
         {view === "final" && <StudentFinalEvalViva />}
+        {view === "users" && <UsersAndRoles />}
       </main>
     </div>
   )
