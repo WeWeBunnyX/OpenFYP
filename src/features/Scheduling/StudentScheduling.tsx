@@ -1,6 +1,17 @@
 import React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Calendar,
+  Clock,
+  Users,
+  RefreshCw,
+  CheckCircle2,
+  GraduationCap,
+} from "lucide-react"
 
 type Schedule = {
     id: number
@@ -94,86 +105,187 @@ export default function StudentScheduling() {
         }
     }
 
+    const formatDate = (dateStr: string | null | undefined) => {
+        if (!dateStr) return "-"
+        return new Date(dateStr).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+    }
+
+    const getStatusBadge = (status?: string) => {
+        switch (status) {
+            case "scheduled":
+                return <Badge className="bg-blue-500 gap-1"><Calendar className="h-3 w-3" />Scheduled</Badge>
+            case "completed":
+                return <Badge className="bg-green-500 gap-1"><CheckCircle2 className="h-3 w-3" />Completed</Badge>
+            default:
+                return <Badge variant="outline">{status || "Unknown"}</Badge>
+        }
+    }
+
     return (
-        <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold">My Schedules</h2>
-                <div className="flex gap-2">
-                    <Button onClick={load} variant="outline" size="sm">Refresh</Button>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">My Schedules</h1>
+                    <p className="text-muted-foreground">View your defense and interim evaluation schedules</p>
                 </div>
+                <Button onClick={load} variant="outline" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                </Button>
             </div>
 
-            {loading && <div className="mb-2">Loading schedules…</div>}
-            {error && <div className="mb-2 text-red-600">{error}</div>}
+            {/* Tabs */}
+            <Tabs defaultValue="defense" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="defense" className="gap-2">
+                        <GraduationCap className="h-4 w-4" />
+                        Defense ({schedules.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="interim" className="gap-2">
+                        <Clock className="h-4 w-4" />
+                        Interim ({interimSchedules.length})
+                    </TabsTrigger>
+                </TabsList>
 
-            <div className="overflow-auto border rounded w-full min-w-0">
-                <table className="w-full table-auto">
-                    <thead className="text-left bg-gray-50">
-                        <tr>
-                            <th className="p-2">#</th>
-                            <th className="p-2">Title</th>
-                            <th className="p-2">Start</th>
-                            <th className="p-2">End</th>
-                            <th className="p-2">Committee</th>
-                            <th className="p-2">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {schedules.length === 0 && !loading && (
-                            <tr><td colSpan={6} className="p-4 text-center text-sm text-muted-foreground">No schedules found</td></tr>
-                        )}
-                        {schedules.map(s => (
-                            <tr key={s.id} className="border-t">
-                                <td className="p-2 align-top">{s.id}</td>
-                                <td className="p-2 align-top">{s.title || "-"}</td>
-                                <td className="p-2 align-top">{s.start ? new Date(s.start).toLocaleString() : "-"}</td>
-                                <td className="p-2 align-top">{s.end ? new Date(s.end).toLocaleString() : "-"}</td>
-                                <td className="p-2 align-top text-sm">{s.committee && s.committee.length ? s.committee.join(", ") : "-"}</td>
-                                <td className="p-2 align-top">{s.status || "-"}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="mt-8">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-semibold">Interim Schedules</h3>
-                    <div className="flex gap-2">
-                        <Button onClick={loadInterim} variant="outline" size="sm">Refresh</Button>
-                    </div>
-                </div>
-                {loadingInterim && <div className="mb-2">Loading interim…</div>}
-                <div className="overflow-auto border rounded w-full min-w-0">
-                    <table className="w-full table-auto">
-                        <thead className="text-left bg-gray-50">
-                            <tr>
-                                <th className="p-2">#</th>
-                                <th className="p-2">Title</th>
-                                <th className="p-2">Start</th>
-                                <th className="p-2">End</th>
-                                <th className="p-2">Evaluators</th>
-                                <th className="p-2">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {interimSchedules.length === 0 && !loadingInterim && (
-                                <tr><td colSpan={6} className="p-4 text-center text-sm text-muted-foreground">No interim schedules found</td></tr>
-                            )}
-                            {interimSchedules.map(s => (
-                                <tr key={s.id} className="border-t">
-                                    <td className="p-2 align-top">{s.id}</td>
-                                    <td className="p-2 align-top">{s.title || "-"}</td>
-                                    <td className="p-2 align-top">{s.start ? new Date(s.start).toLocaleString() : "-"}</td>
-                                    <td className="p-2 align-top">{s.end ? new Date(s.end).toLocaleString() : "-"}</td>
-                                    <td className="p-2 align-top text-sm">{s.evaluators && s.evaluators.length ? s.evaluators.join(", ") : "-"}</td>
-                                    <td className="p-2 align-top">{s.status || "-"}</td>
-                                </tr>
+                {/* Defense Schedules */}
+                <TabsContent value="defense" className="space-y-4">
+                    {loading ? (
+                        <Card className="p-8 text-center text-muted-foreground">Loading schedules...</Card>
+                    ) : schedules.length === 0 ? (
+                        <Card className="p-8 text-center">
+                            <Calendar className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                            <p className="text-muted-foreground">No defense schedules assigned yet</p>
+                        </Card>
+                    ) : (
+                        <div className="space-y-4">
+                            {schedules.map((s) => (
+                                <Card key={s.id} className="overflow-hidden border-l-4 border-l-sky-500 hover:shadow-lg transition-shadow">
+                                    <CardHeader className="pb-3 bg-gradient-to-r from-sky-50 to-blue-50">
+                                        <div className="flex items-start justify-between">
+                                            <div className="space-y-1">
+                                                <CardTitle className="text-lg flex items-center gap-2">
+                                                    <GraduationCap className="h-5 w-5 text-sky-600" />
+                                                    {s.title || "Defense"}
+                                                </CardTitle>
+                                                <CardDescription>{s.proposal || "FYP Project"}</CardDescription>
+                                            </div>
+                                            {getStatusBadge(s.status)}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 pt-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex items-center gap-3 p-4 rounded-lg bg-sky-50 border border-sky-200">
+                                                <Calendar className="h-6 w-6 text-sky-600" />
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground font-medium">Starts</p>
+                                                    <p className="text-sm font-semibold">{formatDate(s.start)}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                                                <Clock className="h-6 w-6 text-emerald-600" />
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground font-medium">Ends</p>
+                                                    <p className="text-sm font-semibold">{formatDate(s.end)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {s.committee && s.committee.length > 0 && (
+                                            <div>
+                                                <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                    <Users className="h-4 w-4" />
+                                                    Committee Members
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {s.committee.map((member, idx) => (
+                                                        <Badge key={idx} variant="secondary">{member}</Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-2">
+                                            <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                                            <p className="text-sm text-blue-800">You have been assigned to a defense slot</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* Interim Schedules */}
+                <TabsContent value="interim" className="space-y-4">
+                    {loadingInterim ? (
+                        <Card className="p-8 text-center text-muted-foreground">Loading interim schedules...</Card>
+                    ) : interimSchedules.length === 0 ? (
+                        <Card className="p-8 text-center">
+                            <Clock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                            <p className="text-muted-foreground">No interim evaluation schedules assigned yet</p>
+                        </Card>
+                    ) : (
+                        <div className="space-y-4">
+                            {interimSchedules.map((s) => (
+                                <Card key={s.id} className="overflow-hidden border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow">
+                                    <CardHeader className="pb-3 bg-gradient-to-r from-purple-50 to-pink-50">
+                                        <div className="flex items-start justify-between">
+                                            <div className="space-y-1">
+                                                <CardTitle className="text-lg flex items-center gap-2">
+                                                    <Clock className="h-5 w-5 text-purple-600" />
+                                                    {s.title || "Interim Evaluation"}
+                                                </CardTitle>
+                                                <CardDescription>{s.notes || "Evaluation schedule"}</CardDescription>
+                                            </div>
+                                            {getStatusBadge(s.status)}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 pt-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex items-center gap-3 p-4 rounded-lg bg-purple-50 border border-purple-200">
+                                                <Calendar className="h-6 w-6 text-purple-600" />
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground font-medium">Starts</p>
+                                                    <p className="text-sm font-semibold">{formatDate(s.start)}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 p-4 rounded-lg bg-orange-50 border border-orange-200">
+                                                <Clock className="h-6 w-6 text-orange-600" />
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground font-medium">Ends</p>
+                                                    <p className="text-sm font-semibold">{formatDate(s.end)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {s.evaluators && s.evaluators.length > 0 && (
+                                            <div>
+                                                <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                    <Users className="h-4 w-4" />
+                                                    Evaluators
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {s.evaluators.map((evaluator, idx) => (
+                                                        <Badge key={idx} variant="secondary" className="bg-purple-100">{evaluator}</Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="p-3 rounded-lg bg-purple-50 border border-purple-200 flex items-center gap-2">
+                                            <CheckCircle2 className="h-5 w-5 text-purple-600" />
+                                            <p className="text-sm text-purple-800">Your interim evaluation is scheduled</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }
