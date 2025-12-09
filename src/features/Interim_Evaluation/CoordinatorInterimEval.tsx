@@ -97,6 +97,53 @@ export default function CoordinatorInterimEval() {
     fetchStudents();
   }, []);
 
+  // Fetch marks when student is selected
+  useEffect(() => {
+    if (selectedStudent) {
+      fetchStudentMarks(selectedStudent.email);
+    }
+  }, [selectedStudent?.email]);
+
+  const fetchStudentMarks = async (studentEmail: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/interim-marks/student/${encodeURIComponent(studentEmail)}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update selected student with fetched marks
+        setSelectedStudent(prev => {
+          if (!prev) return null;
+          
+          const stage1Marks = data.marks.find((m: any) => m.stage === 1);
+          const stage2Marks = data.marks.find((m: any) => m.stage === 2);
+          
+          return {
+            ...prev,
+            interimStage1Marks: stage1Marks?.marks,
+            interimStage2Marks: stage2Marks?.marks,
+          };
+        });
+        
+        // Also update in the students list
+        setStudents(prev => prev.map(s => {
+          if (s.email === studentEmail) {
+            const stage1Marks = data.marks.find((m: any) => m.stage === 1);
+            const stage2Marks = data.marks.find((m: any) => m.stage === 2);
+            
+            return {
+              ...s,
+              interimStage1Marks: stage1Marks?.marks,
+              interimStage2Marks: stage2Marks?.marks,
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (err) {
+      console.log("No marks found for student:", studentEmail);
+    }
+  };
+
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
@@ -397,6 +444,7 @@ export default function CoordinatorInterimEval() {
       setShowMarksDialog(false);
       setMarks("");
       setFeedback("");
+      setSelectedStage(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to submit marks";
       console.error("Marks submission error:", err);
@@ -816,7 +864,12 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowMarksDialog(false)} disabled={savingMarks}>
+                          <Button variant="outline" onClick={() => {
+                            setShowMarksDialog(false);
+                            setSelectedStage(null);
+                            setMarks("");
+                            setFeedback("");
+                          }} disabled={savingMarks}>
                             Cancel
                           </Button>
                           <Button onClick={confirmSubmitMarks} disabled={savingMarks}>
@@ -1051,7 +1104,12 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowMarksDialog(false)} disabled={savingMarks}>
+                          <Button variant="outline" onClick={() => {
+                            setShowMarksDialog(false);
+                            setSelectedStage(null);
+                            setMarks("");
+                            setFeedback("");
+                          }} disabled={savingMarks}>
                             Cancel
                           </Button>
                           <Button onClick={confirmSubmitMarks} disabled={savingMarks}>
