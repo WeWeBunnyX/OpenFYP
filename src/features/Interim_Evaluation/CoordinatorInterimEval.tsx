@@ -114,14 +114,21 @@ export default function CoordinatorInterimEval() {
 
       // Map to our Student type with eligibility logic
       const studentsData: Student[] = await Promise.all(students_list.map(async (studentData: any) => {
-        // Get unique months evaluated
-        const uniqueMonths = new Set(
-          studentData.evaluations.map((e: any) => e.evaluationMonth)
-        );
+        // Fetch actual progress logs count for this student
+        let logsSubmitted = 0;
+        try {
+          const logsResponse = await fetch(
+            `http://localhost:8000/api/progress/logs/count/${encodeURIComponent(studentData.studentEmail)}`
+          );
+          if (logsResponse.ok) {
+            const logsData = await logsResponse.json();
+            logsSubmitted = logsData.count || 0;
+          }
+        } catch (e) {
+          console.log("Failed to fetch log count for", studentData.studentEmail);
+        }
         
-        const logsSubmitted = Math.min(uniqueMonths.size * 2, 24);
-        
-        console.log(`${studentData.studentEmail}: ${uniqueMonths.size} months = ${logsSubmitted} logs`);
+        console.log(`${studentData.studentEmail}: ${logsSubmitted} actual logs submitted`);
         
         // Fetch existing interim schedules for this student
         let schedules: ScheduleRecord[] = [];
@@ -141,8 +148,8 @@ export default function CoordinatorInterimEval() {
           name: studentData.studentName,
           projectTitle: studentData.projectTitle || "",
           registrationId: studentData.registrationId,
-          logsSubmitted: logsSubmitted || 0,
-          supervisorEvaluationsComplete: uniqueMonths.size >= 7 || logsSubmitted >= 12,
+          logsSubmitted: logsSubmitted,
+          supervisorEvaluationsComplete: logsSubmitted >= 12,
           eligibleForStage1: logsSubmitted >= 12,
           eligibleForStage2: logsSubmitted >= 24,
           interimStage1Status: schedules.length > 0 ? (schedules[0]?.status || "pending") : "pending",
@@ -526,9 +533,21 @@ export default function CoordinatorInterimEval() {
           <h2 className="text-2xl font-bold">Interim Evaluations</h2>
           <p className="text-sm text-muted-foreground mt-1">{selectedStudent.name} - {selectedStudent.projectTitle}</p>
         </div>
-        <Button variant="outline" onClick={() => setSelectedStudent(null)}>
-          ← Back to List
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setLoadingStudents(true);
+              fetchStudents();
+            }}
+            disabled={loadingStudents}
+          >
+            {loadingStudents ? "Refreshing..." : "↻ Refresh"}
+          </Button>
+          <Button variant="outline" onClick={() => setSelectedStudent(null)}>
+            ← Back to List
+          </Button>
+        </div>
       </div>
 
       {/* Student Status Overview */}
