@@ -41,7 +41,7 @@ type GradingRubric = {
 };
 
 type StudentViva = {
-  id: string;
+  id: number;
   studentEmail: string;
   studentName: string;
   projectTitle: string;
@@ -92,7 +92,7 @@ export default function CoordinatorFinalEvalViva() {
 
   // Fetch full evaluation details when student is selected
   useEffect(() => {
-    if (selectedStudent) {
+    if (selectedStudent?.id) {
       fetchFullEvaluationDetails(selectedStudent.id);
     }
   }, [selectedStudent?.id]);
@@ -106,7 +106,7 @@ export default function CoordinatorFinalEvalViva() {
       const data = await response.json();
       
       const transformedStudents = data.map((student: any) => ({
-        id: student.id.toString(),
+        id: student.id, // Keep as number for consistency with API
         studentEmail: student.student_email,
         studentName: student.student_name,
         projectTitle: student.project_title,
@@ -129,11 +129,18 @@ export default function CoordinatorFinalEvalViva() {
     }
   };
 
-  const fetchFullEvaluationDetails = async (evalId: string) => {
+  const fetchFullEvaluationDetails = async (evalId: number) => {
     try {
+      if (!evalId) {
+        console.warn("No evaluation ID provided");
+        return;
+      }
+
       const response = await fetch(`http://localhost:8000/api/final-evaluation/${evalId}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch evaluation details");
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Failed to fetch evaluation details:", errorData);
+        return;
       }
       const data = await response.json();
       
@@ -372,26 +379,29 @@ export default function CoordinatorFinalEvalViva() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to publish results");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to publish results");
       }
 
+      const data = await response.json();
+      
       setSelectedStudent((prev) =>
         prev
           ? {
               ...prev,
-              status: "published",
+              status: data.status || "published",
             }
           : null
       );
 
       setStudents((prev) =>
-        prev.map((s) => (s.id === selectedStudent.id ? { ...selectedStudent, status: "published" } : s))
+        prev.map((s) => (s.id === selectedStudent.id ? { ...selectedStudent, status: data.status || "published" } : s))
       );
 
       toast.success("✅ Results published! Students can now view their final grades");
     } catch (err) {
       console.error("Error publishing results:", err);
-      toast.error("Failed to publish results");
+      toast.error(err instanceof Error ? err.message : "Failed to publish results");
     } finally {
       setPublishingResults(false);
     }
@@ -430,7 +440,8 @@ export default function CoordinatorFinalEvalViva() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to submit marks");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to submit marks");
       }
 
       const data = await response.json();
@@ -450,7 +461,7 @@ export default function CoordinatorFinalEvalViva() {
       toast.success(`✅ Marks submitted for committee member`);
     } catch (err) {
       console.error("Error submitting marks:", err);
-      toast.error("Failed to submit marks");
+      toast.error(err instanceof Error ? err.message : "Failed to submit marks");
     } finally {
       setSubmittingMarks(false);
     }
@@ -472,14 +483,17 @@ export default function CoordinatorFinalEvalViva() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to approve marks");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to approve marks");
       }
 
+      const data = await response.json();
+      
       setSelectedStudent((prev) =>
         prev
           ? {
               ...prev,
-              approvalStatus: "approved",
+              approvalStatus: data.approval_status || "approved",
             }
           : null
       );
@@ -487,7 +501,7 @@ export default function CoordinatorFinalEvalViva() {
       toast.success("✅ Marks approved successfully");
     } catch (err) {
       console.error("Error approving marks:", err);
-      toast.error("Failed to approve marks");
+      toast.error(err instanceof Error ? err.message : "Failed to approve marks");
     }
   };
 
