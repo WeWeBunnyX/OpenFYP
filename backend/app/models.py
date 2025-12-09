@@ -144,6 +144,63 @@ class InterimEvaluationMarks(SQLModel, table=True):
     updated_at: Optional[datetime] = None
 
 
+class FinalEvaluationViva(SQLModel, table=True):
+    """Final evaluation and viva records for student projects.
+    
+    Comprehensive storage for all final evaluation data including:
+    - Committee member assignments (Chairman, Internal, External)
+    - Grading rubric configuration
+    - Committee member marks and feedback
+    - Calculated weighted averages and final grades
+    - Approval workflow status
+    - Publication status and timestamps
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    
+    # Student Information
+    registration_id: Optional[int] = None
+    student_email: str = Field(index=True)
+    student_name: str
+    project_title: str
+    supervisor_email: Optional[str] = None
+    supervisor_name: Optional[str] = None
+    
+    # Viva Scheduling
+    viva_date: Optional[datetime] = None
+    viva_location: Optional[str] = None
+    
+    # Committee Members (stored as JSON list)
+    # Format: [{"id": "c1", "name": "Dr. Ahmed Khan", "email": "dr.ahmed@uni.edu", "role": "Chairman"}, ...]
+    committee_members: List[dict] = Field(sa_column=Column(JSON), default_factory=list)
+    
+    # Grading Rubric (stored as JSON list)
+    # Format: [{"id": "r1", "criteriaName": "Technical Knowledge", "maxMarks": 25, "weight": 0.25}, ...]
+    grading_rubric: List[dict] = Field(sa_column=Column(JSON), default_factory=list)
+    
+    # Committee Member Marks and Feedback (stored as JSON dict)
+    # Format: {"c1": {"marks": 85, "feedback": "Excellent", "submittedAt": "2025-12-15T11:30:00"}, ...}
+    committee_marks: dict = Field(sa_column=Column(JSON), default_factory=dict)
+    
+    # Calculated Results
+    weighted_average: Optional[float] = None  # Auto-calculated from committee marks and rubric weights
+    final_grade: Optional[str] = None  # A, B, C, D based on weighted_average
+    
+    # Approval Workflow
+    approval_status: str = Field(default="pending")  # pending, approved, rejected
+    approval_feedback: Optional[str] = None
+    approved_by: Optional[str] = None  # Coordinator email
+    approved_at: Optional[datetime] = None
+    
+    # Publication Status
+    status: str = Field(default="pending")  # pending, scheduled, in-progress, completed, published
+    published_at: Optional[datetime] = None
+    published_by: Optional[str] = None  # Coordinator email
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+
 def get_session():
     with Session(engine) as session:
         yield session
