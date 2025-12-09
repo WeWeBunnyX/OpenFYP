@@ -85,50 +85,42 @@ export default function CoordinatorFinalEvalViva() {
   const [publishingResults, setPublishingResults] = useState(false);
   const [rubricErrors, setRubricErrors] = useState<RubricError[]>([]);
 
-  // Mock data - replace with actual API calls
+  // Fetch students from backend API
   useEffect(() => {
-    const mockData: StudentViva[] = [
-      {
-        id: "1",
-        studentEmail: "hash@hash.com",
-        studentName: "Hash Student",
-        projectTitle: "AI-Based Project",
-        status: "completed",
-        vivaDate: "2025-12-15T10:00:00",
-        committee: [
-          { id: "c1", name: "Dr. Ahmed Khan", email: "dr.ahmed@uni.edu", role: "Chairman" },
-          { id: "c2", name: "Dr. Fatima Ali", email: "dr.fatima@uni.edu", role: "Internal" },
-          { id: "c3", name: "Prof. James Wilson", email: "prof.james@uni.edu", role: "External" },
-        ],
-        marks: {
-          c1: { marks: 85, feedback: "Excellent technical knowledge", submittedAt: "2025-12-15T11:30:00" },
-          c2: { marks: 80, feedback: "Good implementation", submittedAt: "2025-12-15T11:45:00" },
-          c3: { marks: 88, feedback: "Outstanding presentation", submittedAt: "2025-12-15T12:00:00" },
-        },
-        calculatedFinalMarks: 84.25,
-        weightedAverage: 84.25,
-        approvalStatus: "approved",
-      },
-      {
-        id: "2",
-        studentEmail: "test@example.com",
-        studentName: "Test Student",
-        projectTitle: "Web Application",
-        status: "scheduled",
-        vivaDate: "2025-12-16T14:00:00",
-        committee: [
-          { id: "c1", name: "Dr. Ahmed Khan", email: "dr.ahmed@uni.edu", role: "Chairman" },
-          { id: "c2", name: "Dr. Fatima Ali", email: "dr.fatima@uni.edu", role: "Internal" },
-        ],
-        marks: {},
-        approvalStatus: "pending",
-      },
-    ];
-    setStudents(mockData);
-    if (mockData.length > 0) {
-      setSelectedStudent(mockData[0]);
-    }
+    fetchStudentsForFinalEval();
   }, []);
+
+  const fetchStudentsForFinalEval = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/final-evaluation/coordinator/students");
+      if (!response.ok) {
+        throw new Error("Failed to fetch students");
+      }
+      const data = await response.json();
+      
+      const transformedStudents = data.map((student: any) => ({
+        id: student.id.toString(),
+        studentEmail: student.student_email,
+        studentName: student.student_name,
+        projectTitle: student.project_title,
+        status: student.status,
+        vivaDate: student.viva_date,
+        committee: [],
+        marks: {},
+        weightedAverage: student.weighted_average,
+        approvalStatus: student.approval_status,
+      }));
+      
+      setStudents(transformedStudents);
+      if (transformedStudents.length > 0) {
+        setSelectedStudent(transformedStudents[0]);
+      }
+    } catch (err) {
+      console.error("Error fetching students:", err);
+      toast.error("Failed to load students for final evaluation");
+      setStudents([]);
+    }
+  }
 
   const filteredStudents = students.filter(
     (s) =>

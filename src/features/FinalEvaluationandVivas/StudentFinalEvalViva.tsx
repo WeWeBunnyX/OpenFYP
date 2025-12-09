@@ -56,41 +56,34 @@ export default function StudentFinalEvalViva() {
   const fetchFinalEvaluation = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API call
-      const mockData: FinalEvaluation = {
-        studentEmail: user?.email || "",
-        studentName: user?.name || "Student",
-        projectTitle: "AI-Based Project Management System",
-        status: "published",
-        vivaDate: "2025-12-15T10:00:00",
-        committee: [
-          { id: "c1", name: "Dr. Ahmed Khan", email: "dr.ahmed@uni.edu", role: "Chairman" },
-          { id: "c2", name: "Dr. Fatima Ali", email: "dr.fatima@uni.edu", role: "Internal" },
-          { id: "c3", name: "Prof. James Wilson", email: "prof.james@uni.edu", role: "External" },
-        ],
-        marks: {
-          c1: {
-            marks: 85,
-            feedback: "Excellent technical knowledge and implementation",
-            submittedAt: "2025-12-15T11:30:00",
-          },
-          c2: {
-            marks: 80,
-            feedback: "Good project design and execution",
-            submittedAt: "2025-12-15T11:45:00",
-          },
-          c3: {
-            marks: 88,
-            feedback: "Outstanding presentation and Q&A performance",
-            submittedAt: "2025-12-15T12:00:00",
-          },
-        },
-        weightedAverage: 84.33,
-        finalGrade: "A",
-        publishedAt: "2025-12-15T13:00:00",
+      if (!user?.email) {
+        throw new Error("User email not available");
+      }
+      
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/student/${encodeURIComponent(user.email)}`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch final evaluation");
+      }
+      
+      const data = await response.json();
+      
+      const evalData: FinalEvaluation = {
+        studentEmail: data.student_email,
+        studentName: data.student_name,
+        projectTitle: data.project_title,
+        status: data.status,
+        vivaDate: data.viva_date,
+        committee: data.committee_members || [],
+        marks: data.committee_marks || {},
+        weightedAverage: data.weighted_average,
+        finalGrade: data.final_grade,
+        publishedAt: data.published_at,
       };
-
-      setEvaluation(mockData);
+      
+      setEvaluation(evalData);
     } catch (err) {
       console.error("Error fetching final evaluation:", err);
       toast.error("Failed to fetch final evaluation data");

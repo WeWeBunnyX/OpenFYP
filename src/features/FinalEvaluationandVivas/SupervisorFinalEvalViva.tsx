@@ -54,67 +54,36 @@ export default function SupervisorFinalEvalViva() {
   const fetchSupervisedStudents = async () => {
     setLoading(true);
     try {
-      // Mock data - replace with actual API call
-      const mockStudents: StudentFinalEval[] = [
-        {
-          studentEmail: "student1@uni.edu",
-          studentName: "Ali Ahmed",
-          projectTitle: "AI-Based Project Management System",
-          status: "published",
-          vivaDate: "2025-12-15T10:00:00",
-          committee: [
-            { id: "c1", name: "Dr. Ahmed Khan", email: "dr.ahmed@uni.edu", role: "Chairman" },
-            { id: "c2", name: "Dr. Fatima Ali", email: "dr.fatima@uni.edu", role: "Internal" },
-            { id: "c3", name: "Prof. James Wilson", email: "prof.james@uni.edu", role: "External" },
-          ],
-          weightedAverage: 84.33,
-          finalGrade: "A",
-          publishedAt: "2025-12-15T13:00:00",
-          completedAt: "2025-12-15T12:00:00",
-        },
-        {
-          studentEmail: "student2@uni.edu",
-          studentName: "Fatima Khan",
-          projectTitle: "Machine Learning for Healthcare",
-          status: "published",
-          vivaDate: "2025-12-16T14:00:00",
-          committee: [
-            { id: "c4", name: "Prof. Sarah Smith", email: "prof.sarah@uni.edu", role: "Chairman" },
-            { id: "c5", name: "Dr. Hassan Ali", email: "dr.hassan@uni.edu", role: "Internal" },
-            { id: "c6", name: "Dr. Emily Brown", email: "dr.emily@uni.edu", role: "External" },
-          ],
-          weightedAverage: 76.5,
-          finalGrade: "B",
-          publishedAt: "2025-12-16T15:00:00",
-          completedAt: "2025-12-16T14:30:00",
-        },
-        {
-          studentEmail: "student3@uni.edu",
-          studentName: "Muhammad Hassan",
-          projectTitle: "Cloud Computing Infrastructure",
-          status: "in-progress",
-          vivaDate: "2025-12-17T11:00:00",
-          committee: [
-            { id: "c7", name: "Dr. John Smith", email: "dr.john@uni.edu", role: "Chairman" },
-            { id: "c8", name: "Prof. Lisa Anderson", email: "prof.lisa@uni.edu", role: "Internal" },
-          ],
-          completedAt: undefined,
-        },
-        {
-          studentEmail: "student4@uni.edu",
-          studentName: "Asha Patel",
-          projectTitle: "Blockchain-Based Supply Chain",
-          status: "scheduled",
-          vivaDate: "2025-12-20T10:00:00",
-          committee: [
-            { id: "c9", name: "Prof. Michael Chen", email: "prof.michael@uni.edu", role: "Chairman" },
-          ],
-        },
-      ];
+      if (!user?.email) {
+        throw new Error("User email not available");
+      }
+      
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/supervisor/${encodeURIComponent(user.email)}`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch supervised students");
+      }
+      
+      const data = await response.json();
+      
+      const studentsList = data.map((student: any) => ({
+        studentEmail: student.student_email,
+        studentName: student.student_name,
+        projectTitle: student.project_title,
+        status: student.status,
+        vivaDate: student.viva_date,
+        committee: student.committee_members || [],
+        weightedAverage: student.weighted_average,
+        finalGrade: student.final_grade,
+        publishedAt: student.published_at,
+        completedAt: student.updated_at,
+      }));
 
-      setStudents(mockStudents);
-      if (mockStudents.length > 0) {
-        setSelectedStudent(mockStudents[0]);
+      setStudents(studentsList);
+      if (studentsList.length > 0) {
+        setSelectedStudent(studentsList[0]);
       }
     } catch (err) {
       console.error("Error fetching students:", err);
