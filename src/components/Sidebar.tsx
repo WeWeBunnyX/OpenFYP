@@ -113,7 +113,14 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
                     </SidebarMenuButton>
                     {m.key === "grading" && (
                       <SidebarMenuSub>
-                        <SidebarMenuSubButton href="#" size="md">
+                        <SidebarMenuSubButton 
+                          onClick={() => {
+                            setActive("interim")
+                            onSelect?.("interim")
+                          }}
+                          isActive={active === "interim"}
+                          size="md"
+                        >
                           Interim Evaluation
                         </SidebarMenuSubButton>
                         <SidebarMenuSubButton href="#" size="md">
