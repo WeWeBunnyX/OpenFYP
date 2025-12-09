@@ -61,9 +61,22 @@ export default function SupervisorInterimEval() {
       const response = await fetch(
         `http://localhost:8000/api/interim-scheduling/supervisor/${encodeURIComponent(user?.email || "")}`
       );
-      if (response.ok) {
-        const data = await response.json();
-        
+
+      if (!response.ok) {
+        console.log("No interim scheduling data available");
+        setStudents([]);
+        toast.info("No students assigned for interim evaluation yet.");
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        setStudents([]);
+        toast.info("No students assigned for interim evaluation yet.");
+        return;
+      }
+
         // Fetch marks for each student
         const studentsWithMarks = await Promise.all(
           data.map(async (student: any) => {
@@ -73,16 +86,18 @@ export default function SupervisorInterimEval() {
               );
               if (marksResponse.ok) {
                 const marksData = await marksResponse.json();
-                const stage1Marks = marksData.marks.find((m: any) => m.stage === 1);
-                const stage2Marks = marksData.marks.find((m: any) => m.stage === 2);
-                
-                return {
-                  ...student,
-                  interimStage1Marks: stage1Marks?.marks,
-                  interimStage1Feedback: stage1Marks?.feedback,
-                  interimStage2Marks: stage2Marks?.marks,
-                  interimStage2Feedback: stage2Marks?.feedback,
-                };
+                if (marksData.marks && Array.isArray(marksData.marks)) {
+                  const stage1Marks = marksData.marks.find((m: any) => m.stage === 1);
+                  const stage2Marks = marksData.marks.find((m: any) => m.stage === 2);
+
+                  return {
+                    ...student,
+                    interimStage1Marks: stage1Marks?.marks,
+                    interimStage1Feedback: stage1Marks?.feedback,
+                    interimStage2Marks: stage2Marks?.marks,
+                    interimStage2Feedback: stage2Marks?.feedback,
+                  };
+                }
               }
               return student;
             } catch (err) {
@@ -93,12 +108,10 @@ export default function SupervisorInterimEval() {
         );
         
         setStudents(studentsWithMarks);
-      } else {
-        toast.error("Failed to fetch students");
-      }
     } catch (err) {
       console.error("Error fetching students:", err);
-      toast.error("Error fetching students");
+      setStudents([]);
+      toast.error("Unable to load students. Check your backend connection.");
     } finally {
       setLoadingStudents(false);
     }
