@@ -150,12 +150,21 @@ export default function CoordinatorInterimEval() {
       // Fetch all students who have supervisor evaluations
       const evalResponse = await fetch("http://localhost:8000/api/evaluations/coordinator/all-students");
       
-      if (!evalResponse.ok) throw new Error("Failed to fetch evaluations");
-      
+      if (!evalResponse.ok) {
+        console.log("Evaluations endpoint not available");
+        setStudents([]);
+        toast.info("No evaluation data available yet. Students need to complete supervisor evaluations first.");
+        return;
+      }
+
       const data = await evalResponse.json();
-      
-      // The endpoint returns an array directly
       const students_list = Array.isArray(data) ? data : data.students || [];
+
+      if (students_list.length === 0) {
+        setStudents([]);
+        toast.info("No students with evaluations found.");
+        return;
+      }
 
       console.log("Fetched students:", students_list);
 
@@ -181,10 +190,11 @@ export default function CoordinatorInterimEval() {
         let schedules: ScheduleRecord[] = [];
         try {
           const scheduleResponse = await fetch(
-            `http://localhost:8000/api/interim-scheduling/${studentData.studentEmail}`
+            `http://localhost:8000/api/interim-scheduling/${encodeURIComponent(studentData.studentEmail)}`
           );
           if (scheduleResponse.ok) {
-            schedules = await scheduleResponse.json();
+            const scheduleData = await scheduleResponse.json();
+            schedules = Array.isArray(scheduleData) ? scheduleData : [];
           }
         } catch (e) {
           console.log("No schedules found for", studentData.studentEmail);
@@ -192,8 +202,8 @@ export default function CoordinatorInterimEval() {
         
         return {
           email: studentData.studentEmail,
-          name: studentData.studentName,
-          projectTitle: studentData.projectTitle || "",
+          name: studentData.studentName || "Unknown",
+          projectTitle: studentData.projectTitle || "Unknown Project",
           registrationId: studentData.registrationId,
           logsSubmitted: logsSubmitted,
           supervisorEvaluationsComplete: logsSubmitted >= 12,
@@ -210,7 +220,8 @@ export default function CoordinatorInterimEval() {
       setStudents(studentsData);
     } catch (err) {
       console.error("Failed to fetch students:", err);
-      toast.error("Failed to load students list");
+      setStudents([]);
+      toast.error("Unable to load students. Make sure students have completed evaluations.");
     } finally {
       setLoadingStudents(false);
     }

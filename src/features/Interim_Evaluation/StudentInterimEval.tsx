@@ -59,66 +59,99 @@ export default function StudentInterimEval() {
   const fetchStudentData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/interim-scheduling/${encodeURIComponent(user?.email || "")}`
-      );
-      
-      if (response.ok) {
-        const schedulesData = await response.json();
-        
-        // Fetch student basic info and eligibility
+      // Initialize default student data
+      let studentInfo: any = {
+        email: user?.email || "",
+        name: user?.name || "Student",
+        projectTitle: "FYP Project",
+        logsSubmitted: 0,
+        supervisorEvaluationsComplete: false,
+        eligibleForStage1: false,
+        eligibleForStage2: false,
+        interimStage1Status: "pending",
+        interimStage2Status: "pending",
+      };
+
+      // Fetch schedules
+      try {
+        const response = await fetch(
+          `http://localhost:8000/api/interim-scheduling/${encodeURIComponent(user?.email || "")}`
+        );
+
+        if (response.ok) {
+          const schedulesData = await response.json();
+          if (Array.isArray(schedulesData) && schedulesData.length > 0) {
+            studentInfo.interimStage1Schedule = schedulesData[0];
+            studentInfo.interimStage1Status = schedulesData[0]?.status || "pending";
+            if (schedulesData.length > 1) {
+              studentInfo.interimStage2Schedule = schedulesData[1];
+              studentInfo.interimStage2Status = schedulesData[1]?.status || "pending";
+            }
+          }
+        }
+      } catch (err) {
+        console.log("Could not fetch schedules:", err);
+      }
+
+      // Fetch student basic info and eligibility
+      try {
         const studentResponse = await fetch(
           `http://localhost:8000/api/progress/logs/count/${encodeURIComponent(user?.email || "")}`
         );
         
-        let studentInfo: any = {
-          email: user?.email || "",
-          name: user?.name || "Student",
-          projectTitle: "FYP Project",
-          logsSubmitted: 0,
-        };
-
         if (studentResponse.ok) {
           const countData = await studentResponse.json();
           studentInfo.logsSubmitted = countData.count || 0;
           studentInfo.eligibleForStage1 = studentInfo.logsSubmitted >= 12;
           studentInfo.eligibleForStage2 = studentInfo.logsSubmitted >= 24;
         }
+      } catch (err) {
+        console.log("Could not fetch progress logs count:", err);
+      }
 
-        // Process schedules
-        if (Array.isArray(schedulesData) && schedulesData.length > 0) {
-          studentInfo.interimStage1Schedule = schedulesData[0];
-          studentInfo.interimStage1Status = schedulesData[0]?.status || "pending";
-          studentInfo.interimStage2Schedule = schedulesData[1];
-          studentInfo.interimStage2Status = schedulesData[1]?.status || "pending";
-        }
-
-        // Fetch marks
-        try {
-          const marksResponse = await fetch(
-            `http://localhost:8000/api/interim-marks/student/${encodeURIComponent(user?.email || "")}`
-          );
-          if (marksResponse.ok) {
-            const marksData = await marksResponse.json();
+      // Fetch marks
+      try {
+        const marksResponse = await fetch(
+          `http://localhost:8000/api/interim-marks/student/${encodeURIComponent(user?.email || "")}`
+        );
+        if (marksResponse.ok) {
+          const marksData = await marksResponse.json();
+          if (marksData.marks && Array.isArray(marksData.marks)) {
             const stage1Marks = marksData.marks.find((m: any) => m.stage === 1);
             const stage2Marks = marksData.marks.find((m: any) => m.stage === 2);
             
-            studentInfo.interimStage1Marks = stage1Marks?.marks;
-            studentInfo.interimStage1Feedback = stage1Marks?.feedback;
-            studentInfo.interimStage2Marks = stage2Marks?.marks;
-            studentInfo.interimStage2Feedback = stage2Marks?.feedback;
+            if (stage1Marks) {
+              studentInfo.interimStage1Marks = stage1Marks.marks;
+              studentInfo.interimStage1Feedback = stage1Marks.feedback;
+            }
+            if (stage2Marks) {
+              studentInfo.interimStage2Marks = stage2Marks.marks;
+              studentInfo.interimStage2Feedback = stage2Marks.feedback;
+            }
           }
-        } catch (err) {
-          console.log("No marks found for student");
         }
+      } catch (err) {
+        console.log("Could not fetch marks:", err);
+      }
 
-        setStudentData(studentInfo);
-      } else {
-        toast.error("Failed to fetch your evaluation data");
+      setStudentData(studentInfo);
+      if (studentInfo.logsSubmitted === 0) {
+        toast.info("No evaluation data found. Complete your progress logs first.");
       }
     } catch (err) {
       console.error("Error fetching student data:", err);
-      toast.error("Error fetching evaluation data");
+      toast.error("Unable to load evaluation data. Please try again.");
+      setStudentData({
+        email: user?.email || "",
+        name: user?.name || "Student",
+        projectTitle: "FYP Project",
+        logsSubmitted: 0,
+        supervisorEvaluationsComplete: false,
+        eligibleForStage1: false,
+        eligibleForStage2: false,
+        interimStage1Status: "pending",
+        interimStage2Status: "pending",
+      });
     } finally {
       setLoading(false);
     }
