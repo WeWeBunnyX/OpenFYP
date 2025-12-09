@@ -123,7 +123,14 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
                         >
                           Interim Evaluation
                         </SidebarMenuSubButton>
-                        <SidebarMenuSubButton href="#" size="md">
+                        <SidebarMenuSubButton 
+                          onClick={() => {
+                            setActive("final")
+                            onSelect?.("final")
+                          }}
+                          isActive={active === "final"}
+                          size="md"
+                        >
                           Final Evaluation & Vivas
                         </SidebarMenuSubButton>
                       </SidebarMenuSub>

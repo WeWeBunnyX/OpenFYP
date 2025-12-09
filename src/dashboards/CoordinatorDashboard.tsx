@@ -9,10 +9,11 @@ import CoordinatorScheduling from "@/features/Scheduling/CoordinatorScheduling"
 import CoordinatorProgressTracking from "@/features/ProgressTracking/CoordinatorProgressTracking"
 import CoordinatorEvalGrading from "@/features/EvaluationandGrading/CoordinatorEvalGrading"
 import CoordinatorInterimEval from "@/features/Interim_Evaluation/CoordinatorInterimEval"
+import CoordinatorFinalEvalViva from "@/features/FinalEvaluationandVivas/CoordinatorFinalEvalViva"
 
 export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => void }) {
     // include 'schedule' view so the Sidebar's 'schedule' key can show the scheduling UI
-    const [view, setView] = React.useState<"home" | "registration" | "proposal" | "schedule" | "progress" | "grading" | "interim">("home")
+    const [view, setView] = React.useState<"home" | "registration" | "proposal" | "schedule" | "progress" | "grading" | "interim" | "final">("home")
 
     const handleNavigate = (key: string) => {
         if (key === "registration") setView("registration")
@@ -21,6 +22,7 @@ export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => vo
         else if (key === "progress") setView("progress")
         else if (key === "grading") setView("grading")
         else if (key === "interim") setView("interim")
+        else if (key === "final") setView("final")
         else setView("home")
     }
 
@@ -38,6 +40,7 @@ export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => vo
                 {view === "progress" && <CoordinatorProgressTracking />}
                 {view === "grading" && <CoordinatorEvalGrading />}
                 {view === "interim" && <CoordinatorInterimEval />}
+                {view === "final" && <CoordinatorFinalEvalViva />}
             </main>
         </div>
     )
