@@ -127,6 +127,24 @@ class ProgressGrading(SQLModel, table=True):
     updated_at: Optional[datetime] = None
 
 
+class InterimEvaluationMarks(SQLModel, table=True):
+    """Marks and feedback submitted for interim evaluations.
+    
+    Stores Stage 1 (Month 4) and Stage 2 (Month 7+) evaluation marks awarded to students.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    interim_scheduling_id: int
+    student_email: str
+    evaluator_email: str
+    stage: int  # 1 or 2
+    marks: int  # 0-100
+    feedback: Optional[str] = None
+    status: str = Field(default="submitted")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+
+
 def get_session():
     with Session(engine) as session:
         yield session
+

@@ -97,6 +97,53 @@ export default function CoordinatorInterimEval() {
     fetchStudents();
   }, []);
 
+  // Fetch marks when student is selected
+  useEffect(() => {
+    if (selectedStudent) {
+      fetchStudentMarks(selectedStudent.email);
+    }
+  }, [selectedStudent?.email]);
+
+  const fetchStudentMarks = async (studentEmail: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/interim-marks/student/${encodeURIComponent(studentEmail)}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update selected student with fetched marks
+        setSelectedStudent(prev => {
+          if (!prev) return null;
+          
+          const stage1Marks = data.marks.find((m: any) => m.stage === 1);
+          const stage2Marks = data.marks.find((m: any) => m.stage === 2);
+          
+          return {
+            ...prev,
+            interimStage1Marks: stage1Marks?.marks,
+            interimStage2Marks: stage2Marks?.marks,
+          };
+        });
+        
+        // Also update in the students list
+        setStudents(prev => prev.map(s => {
+          if (s.email === studentEmail) {
+            const stage1Marks = data.marks.find((m: any) => m.stage === 1);
+            const stage2Marks = data.marks.find((m: any) => m.stage === 2);
+            
+            return {
+              ...s,
+              interimStage1Marks: stage1Marks?.marks,
+              interimStage2Marks: stage2Marks?.marks,
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (err) {
+      console.log("No marks found for student:", studentEmail);
+    }
+  };
+
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
@@ -114,14 +161,21 @@ export default function CoordinatorInterimEval() {
 
       // Map to our Student type with eligibility logic
       const studentsData: Student[] = await Promise.all(students_list.map(async (studentData: any) => {
-        // Get unique months evaluated
-        const uniqueMonths = new Set(
-          studentData.evaluations.map((e: any) => e.evaluationMonth)
-        );
+        // Fetch actual progress logs count for this student
+        let logsSubmitted = 0;
+        try {
+          const logsResponse = await fetch(
+            `http://localhost:8000/api/progress/logs/count/${encodeURIComponent(studentData.studentEmail)}`
+          );
+          if (logsResponse.ok) {
+            const logsData = await logsResponse.json();
+            logsSubmitted = logsData.count || 0;
+          }
+        } catch (e) {
+          console.log("Failed to fetch log count for", studentData.studentEmail);
+        }
         
-        const logsSubmitted = Math.min(uniqueMonths.size * 2, 24);
-        
-        console.log(`${studentData.studentEmail}: ${uniqueMonths.size} months = ${logsSubmitted} logs`);
+        console.log(`${studentData.studentEmail}: ${logsSubmitted} actual logs submitted`);
         
         // Fetch existing interim schedules for this student
         let schedules: ScheduleRecord[] = [];
@@ -141,8 +195,8 @@ export default function CoordinatorInterimEval() {
           name: studentData.studentName,
           projectTitle: studentData.projectTitle || "",
           registrationId: studentData.registrationId,
-          logsSubmitted: logsSubmitted || 0,
-          supervisorEvaluationsComplete: uniqueMonths.size >= 7 || logsSubmitted >= 12,
+          logsSubmitted: logsSubmitted,
+          supervisorEvaluationsComplete: logsSubmitted >= 12,
           eligibleForStage1: logsSubmitted >= 12,
           eligibleForStage2: logsSubmitted >= 24,
           interimStage1Status: schedules.length > 0 ? (schedules[0]?.status || "pending") : "pending",
@@ -338,17 +392,25 @@ export default function CoordinatorInterimEval() {
         throw new Error("No interim scheduling found for this student");
       }
       
-      // Use the most recent schedule
-      const scheduleId = schedules[0].id;
+      // Get the correct schedule based on stage (first for Stage 1, second for Stage 2)
+      const scheduleIndex = selectedStage === 1 ? 0 : 1;
+      if (!schedules[scheduleIndex]) {
+        throw new Error(`No interim scheduling found for Stage ${selectedStage}`);
+      }
+      
+      const scheduleId = schedules[scheduleIndex].id;
 
-      // API call to update interim scheduling with marks
-      const response = await fetch(`http://localhost:8000/api/interim-scheduling/${scheduleId}`, {
-        method: "PATCH",
+      // API call to submit marks to the dedicated interim-marks endpoint
+      const response = await fetch("http://localhost:8000/api/interim-marks/submit", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          interim_scheduling_id: scheduleId,
+          student_email: selectedStudent.email,
+          stage: selectedStage,
           marks: marksNum,
+          evaluator_email: user?.email || "coordinator@system.local",
           feedback: feedback || null,
-          evaluators: [user?.email || ""],
         }),
       });
 
@@ -357,6 +419,8 @@ export default function CoordinatorInterimEval() {
         throw new Error(errorData.detail || "Failed to submit marks");
       }
 
+      const savedMarks = await response.json();
+      
       toast.success(`✅ Interim Evaluation Stage ${selectedStage} marks submitted (${marks}/100)`);
       
       // Update local state
@@ -380,6 +444,7 @@ export default function CoordinatorInterimEval() {
       setShowMarksDialog(false);
       setMarks("");
       setFeedback("");
+      setSelectedStage(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to submit marks";
       console.error("Marks submission error:", err);
@@ -526,9 +591,21 @@ export default function CoordinatorInterimEval() {
           <h2 className="text-2xl font-bold">Interim Evaluations</h2>
           <p className="text-sm text-muted-foreground mt-1">{selectedStudent.name} - {selectedStudent.projectTitle}</p>
         </div>
-        <Button variant="outline" onClick={() => setSelectedStudent(null)}>
-          ← Back to List
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setLoadingStudents(true);
+              fetchStudents();
+            }}
+            disabled={loadingStudents}
+          >
+            {loadingStudents ? "Refreshing..." : "↻ Refresh"}
+          </Button>
+          <Button variant="outline" onClick={() => setSelectedStudent(null)}>
+            ← Back to List
+          </Button>
+        </div>
       </div>
 
       {/* Student Status Overview */}
@@ -787,7 +864,12 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowMarksDialog(false)} disabled={savingMarks}>
+                          <Button variant="outline" onClick={() => {
+                            setShowMarksDialog(false);
+                            setSelectedStage(null);
+                            setMarks("");
+                            setFeedback("");
+                          }} disabled={savingMarks}>
                             Cancel
                           </Button>
                           <Button onClick={confirmSubmitMarks} disabled={savingMarks}>
@@ -1022,7 +1104,12 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowMarksDialog(false)} disabled={savingMarks}>
+                          <Button variant="outline" onClick={() => {
+                            setShowMarksDialog(false);
+                            setSelectedStage(null);
+                            setMarks("");
+                            setFeedback("");
+                          }} disabled={savingMarks}>
                             Cancel
                           </Button>
                           <Button onClick={confirmSubmitMarks} disabled={savingMarks}>

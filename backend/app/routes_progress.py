@@ -172,3 +172,27 @@ def check_interim_eligibility(owner: str, session: Session = Depends(get_session
             "message": f"You have completed {total_completed} out of 24 logs. Please upload {missing} more log(s) to become eligible for interim evaluation."
         }
 
+
+@router.get("/api/progress/logs/count/{student_email}")
+def get_progress_logs_count(student_email: str, session: Session = Depends(get_session)):
+    """Get the count of submitted progress logs for a specific student."""
+    if not student_email:
+        return {"studentEmail": student_email, "count": 0}
+    
+    rows = session.exec(
+        select(ProgressLog).where(ProgressLog.owner == student_email)
+    ).all()
+    
+    return {
+        "studentEmail": student_email,
+        "count": len(rows),
+        "logs": [
+            {
+                "slot": r.slot,
+                "title": r.title,
+                "signStatus": r.sign_status,
+                "submittedAt": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in sorted(rows, key=lambda x: x.slot)
+        ]
+    }
