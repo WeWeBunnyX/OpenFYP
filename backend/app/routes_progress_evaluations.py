@@ -437,7 +437,7 @@ def get_interim_scheduling_by_student(
     schedules = session.exec(
         select(InterimScheduling).where(
             InterimScheduling.student_email == student_email
-        )
+        ).order_by(InterimScheduling.id)  # Sort by ID ascending to ensure Stage 1 first, then Stage 2
     ).all()
     
     if not schedules:

@@ -73,6 +73,7 @@ def submit_interim_marks(
         # Update existing marks
         existing_marks.marks = request.marks
         existing_marks.feedback = request.feedback
+        existing_marks.stage = request.stage  # Also update the stage
         existing_marks.status = "submitted"
         existing_marks.updated_at = datetime.utcnow()
         session.add(existing_marks)

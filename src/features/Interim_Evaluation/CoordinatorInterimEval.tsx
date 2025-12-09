@@ -375,6 +375,8 @@ export default function CoordinatorInterimEval() {
       return;
     }
 
+    console.log("Submitting marks - Stage:", selectedStage, "Student:", selectedStudent.email, "Marks:", marksNum);
+
     setSavingMarks(true);
     try {
       // Get the interim scheduling record ID first
@@ -387,6 +389,7 @@ export default function CoordinatorInterimEval() {
       }
       
       const schedules = await scheduleResponse.json();
+      console.log("Fetched schedules:", schedules);
       
       if (!Array.isArray(schedules) || schedules.length === 0) {
         throw new Error("No interim scheduling found for this student");
@@ -399,6 +402,7 @@ export default function CoordinatorInterimEval() {
       }
       
       const scheduleId = schedules[scheduleIndex].id;
+      console.log("Using schedule ID:", scheduleId, "for stage:", selectedStage);
 
       // API call to submit marks to the dedicated interim-marks endpoint
       const response = await fetch("http://localhost:8000/api/interim-marks/submit", {
