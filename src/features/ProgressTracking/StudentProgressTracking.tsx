@@ -1,9 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +21,21 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import {
+  FileText,
+  CheckCircle2,
+  Clock,
+  RefreshCw,
+  Upload,
+  Lock,
+  Unlock,
+  Send,
+  GraduationCap,
+  TrendingUp,
+  ClipboardList,
+  ExternalLink,
+  Award,
+} from "lucide-react";
 
 // Contract
 // - Renders 24 log slots in order (1..24)
@@ -104,7 +127,10 @@ function SlotForm({
 
       let saved: ProgressLog | null = null;
       try {
-        const res = await fetch("http://localhost:8000/api/progress/logs", { method: "POST", body: form });
+        const res = await fetch("http://localhost:8000/api/progress/logs", {
+          method: "POST",
+          body: form,
+        });
         if (!res.ok) {
           const errText = await res.text();
           console.error("POST /api/progress/logs failed:", res.status, errText);
@@ -126,7 +152,7 @@ function SlotForm({
         };
       }
 
-      toast.success(`Log ${index} saved`);
+      toast.success(`Log ${index} saved successfully`);
       onSaved(saved);
       setFile(null);
     } catch (err: unknown) {
@@ -138,83 +164,130 @@ function SlotForm({
   };
 
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="font-semibold">Log {index}</div>
-        {isCompleted ? (
-          <span className="text-xs text-green-600">Submitted</span>
-        ) : disabled ? (
-          <span className="text-xs text-muted-foreground">Locked</span>
-        ) : (
-          <span className="text-xs text-blue-600">Unlocked</span>
-        )}
-      </div>
-      <Separator />
-
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm">Title (optional)</label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+    <Card
+      className={`overflow-hidden ${
+        isCompleted
+          ? "border-l-4 border-l-green-500"
+          : disabled
+          ? "opacity-60"
+          : "border-l-4 border-l-blue-500"
+      }`}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Log {index}
+          </CardTitle>
+          {isCompleted ? (
+            <Badge className="bg-green-500 gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Submitted
+            </Badge>
+          ) : disabled ? (
+            <Badge variant="outline" className="text-muted-foreground gap-1">
+              <Lock className="h-3 w-3" />
+              Locked
+            </Badge>
+          ) : (
+            <Badge className="bg-blue-500 gap-1">
+              <Unlock className="h-3 w-3" />
+              Unlocked
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm">Title (optional)</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={disabled || isCompleted}
+                placeholder="e.g., Week 1 Progress"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">Attachment</Label>
+              {isCompleted && existing?.fileUrl ? (
+                <a
+                  href={existing.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:underline p-2 border rounded-md"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View uploaded file
+                </a>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.zip,.rar"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    disabled={disabled || isCompleted}
+                    className="text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               disabled={disabled || isCompleted}
-              placeholder="e.g., Week 1 Progress"
+              placeholder="Summarize what you accomplished in this period."
+              className="min-h-[80px]"
             />
           </div>
-          <div>
-            <label className="text-sm">Attachment</label>
-            {isCompleted && existing?.fileUrl ? (
-              <a
-                href={existing.fileUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-blue-600 hover:underline"
-              >
-                View uploaded file
-              </a>
-            ) : (
-              <Input
-                type="file"
-                accept=".pdf,.doc,.docx,.zip,.rar"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                disabled={disabled || isCompleted}
-              />
-            )}
-          </div>
-        </div>
-        <div>
-          <label className="text-sm">Description</label>
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={disabled || isCompleted}
-            placeholder="Summarize what you accomplished in this period."
-            className="min-h-[96px]"
-          />
-        </div>
 
-        {isCompleted && existing?.signStatus && (
-          <div className="text-sm">
-            <label className="text-sm font-medium">Supervisor Sign Status:</label>
-            <span
-              className={`ml-2 inline-block px-2 py-1 rounded text-xs font-semibold ${
-                existing.signStatus === "signed"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-yellow-100 text-yellow-800"
-              }`}
+          {isCompleted && existing?.signStatus && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+              <span className="text-sm font-medium">Supervisor Status:</span>
+              {existing.signStatus === "signed" ? (
+                <Badge className="bg-green-500 gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Signed
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="border-yellow-400 text-yellow-600 gap-1"
+                >
+                  <Clock className="h-3 w-3" />
+                  Pending
+                </Badge>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={disabled || isCompleted || saving}
+              className="gap-2"
             >
-              {existing.signStatus === "signed" ? "✓ Signed" : "⏳ Pending"}
-            </span>
+              {isCompleted ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Submitted
+                </>
+              ) : saving ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Submit Log
+                </>
+              )}
+            </Button>
           </div>
-        )}
-
-        <div className="flex justify-end">
-          <Button type="submit" disabled={disabled || isCompleted || saving}>
-            {isCompleted ? "Submitted" : saving ? "Saving..." : "Submit Log"}
-          </Button>
-        </div>
-      </form>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -237,34 +310,44 @@ export default function StudentProgressTracking() {
     return null; // all done
   }, [completedSlots]);
 
-  useEffect(() => {
-    const run = async () => {
-      if (!owner) { setLoading(false); return; }
+  const fetchLogs = async () => {
+    if (!owner) {
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      let data: ProgressLog[] | null = null;
       try {
-        setLoading(true);
-        let data: ProgressLog[] | null = null;
-        try {
-          const res = await fetch(`http://localhost:8000/api/progress/logs?owner=${encodeURIComponent(owner)}`);
-          if (!res.ok) throw new Error("Load failed");
-          data = await res.json();
-        } catch {
-          data = lsLoad(owner);
-        }
-        const valid = (data ?? []).filter((x) => x.slot >= 1 && x.slot <= TOTAL_SLOTS).sort((a, b) => a.slot - b.slot);
-        setLogs(valid);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Unable to load progress logs";
-        toast.error(msg);
-      } finally {
-        setLoading(false);
+        const res = await fetch(
+          `http://localhost:8000/api/progress/logs?owner=${encodeURIComponent(
+            owner
+          )}`
+        );
+        if (!res.ok) throw new Error("Load failed");
+        data = await res.json();
+      } catch {
+        data = lsLoad(owner);
       }
-    };
-    run();
+      const valid = (data ?? [])
+        .filter((x) => x.slot >= 1 && x.slot <= TOTAL_SLOTS)
+        .sort((a, b) => a.slot - b.slot);
+      setLogs(valid);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unable to load progress logs";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
   }, [owner]);
 
   useEffect(() => {
     if (nextUnlocked === null && !loading) {
-      toast.success("All 24 logs submitted. You are ready for interim evaluation.");
+      toast.success("All 24 logs submitted. You are ready for interim evaluation!");
     }
   }, [nextUnlocked, loading]);
 
@@ -279,7 +362,11 @@ export default function StudentProgressTracking() {
   const handleLearnMore = async () => {
     setEvalLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/progress/interim-eligibility?owner=${encodeURIComponent(owner)}`);
+      const res = await fetch(
+        `http://localhost:8000/api/progress/interim-eligibility?owner=${encodeURIComponent(
+          owner
+        )}`
+      );
       if (!res.ok) {
         throw new Error("Failed to check eligibility");
       }
@@ -287,7 +374,6 @@ export default function StudentProgressTracking() {
       setEvalMessage(data.message || "You have successfully uploaded all 24 logs and will be notified for interim evaluation!");
       setShowEvalDialog(true);
     } catch (err) {
-      // Fallback message if API fails
       setEvalMessage("Congratulations! You have successfully uploaded all 24 logs and are now eligible to register for interim evaluation. Your coordinator will schedule your evaluation soon.");
       setShowEvalDialog(true);
     } finally {
@@ -304,17 +390,102 @@ export default function StudentProgressTracking() {
     return items;
   }, [logs]);
 
+  const progressPercent = (logs.length / TOTAL_SLOTS) * 100;
+  const signedCount = logs.filter((l) => l.signStatus === "signed").length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Progress Tracking</h2>
-        <p className="text-sm text-muted-foreground">
-          Upload 24 sequential logs. Each submitted log unlocks the next slot.
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Progress Tracking</h1>
+          <p className="text-muted-foreground">
+            Upload 24 sequential logs to track your FYP progress
+          </p>
+        </div>
+        <Button
+          onClick={fetchLogs}
+          variant="outline"
+          className="gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Total Slots</CardDescription>
+            <CardTitle className="text-2xl">{TOTAL_SLOTS}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Submitted</CardDescription>
+            <CardTitle className="text-2xl">{logs.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-l-emerald-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Signed</CardDescription>
+            <CardTitle className="text-2xl">{signedCount}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-l-purple-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Remaining</CardDescription>
+            <CardTitle className="text-2xl">{TOTAL_SLOTS - logs.length}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Progress Overview */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Your Progress
+              </CardTitle>
+              <CardDescription>
+                Complete all 24 logs to become eligible for interim evaluation
+              </CardDescription>
+            </div>
+            {nextUnlocked === null && (
+              <Badge className="bg-green-500 gap-1">
+                <Award className="h-3 w-3" />
+                Complete!
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>
+                {logs.length} of {TOTAL_SLOTS} logs submitted
+              </span>
+              <span className="font-medium">{Math.round(progressPercent)}%</span>
+            </div>
+            <Progress value={progressPercent} className="h-3" />
+          </div>
+          {nextUnlocked !== null && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Unlock className="h-4 w-4 text-blue-500" />
+              Next unlocked: Log {nextUnlocked}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Log Forms */}
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading your logs...</div>
+        <Card className="p-8 text-center text-muted-foreground">
+          Loading your logs...
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {grid.map(({ slot, existing }) => (
@@ -330,20 +501,39 @@ export default function StudentProgressTracking() {
         </div>
       )}
 
+      {/* Ready for Evaluation */}
       {nextUnlocked === null && !loading && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">Ready for Interim Evaluation</div>
-            <Button
-              onClick={handleLearnMore}
-              disabled={evalLoading}
-            >
-              {evalLoading ? "Checking..." : "Learn more"}
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            All 24 logs have been submitted. You are now eligible for interim evaluation. Keep an eye on the Scheduling section for your assigned time.
-          </p>
+        <Card className="border-2 border-green-500 bg-green-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-green-500 text-white">
+                  <GraduationCap className="h-6 w-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-green-800">
+                    Ready for Interim Evaluation
+                  </CardTitle>
+                  <CardDescription className="text-green-700">
+                    All 24 logs have been submitted successfully
+                  </CardDescription>
+                </div>
+              </div>
+              <Button
+                onClick={handleLearnMore}
+                disabled={evalLoading}
+                className="bg-green-600 hover:bg-green-700 gap-2"
+              >
+                <Award className="h-4 w-4" />
+                {evalLoading ? "Checking..." : "Learn More"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-green-700">
+              Congratulations! You have completed all progress logs. Your coordinator will schedule your interim evaluation soon. Keep an eye on the Scheduling section for your assigned time.
+            </p>
+          </CardContent>
         </Card>
       )}
 
@@ -351,15 +541,16 @@ export default function StudentProgressTracking() {
       <Dialog open={showEvalDialog} onOpenChange={setShowEvalDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Interim Evaluation Eligibility</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-green-500" />
+              Interim Evaluation Eligibility
+            </DialogTitle>
             <DialogDescription className="pt-4">
               {evalMessage}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end mt-4">
-            <Button onClick={() => setShowEvalDialog(false)}>
-              Close
-            </Button>
+            <Button onClick={() => setShowEvalDialog(false)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>

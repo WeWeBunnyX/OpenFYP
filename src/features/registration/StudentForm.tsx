@@ -3,7 +3,10 @@ import { useAuth } from "@/contexts/AuthContext"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -11,11 +14,9 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
-  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -23,6 +24,21 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  FileText,
+  Users,
+  RefreshCw,
+  Download,
+  Upload,
+  Plus,
+  Edit,
+  Trash2,
+  Send,
+  File,
+} from "lucide-react"
 
 export default function StudentForm() {
   const { user } = useAuth()
@@ -33,7 +49,7 @@ export default function StudentForm() {
   const [abstract, setAbstract] = React.useState("")
   const [message, setMessage] = React.useState<string | null>(null)
   const [fileName, setFileName] = React.useState<string | null>(null)
-  const [fileData, setFileData] = React.useState<string | null>(null) // base64 data
+  const [fileData, setFileData] = React.useState<string | null>(null)
   const [fileError, setFileError] = React.useState<string | null>(null)
   const [submittedRegistration, setSubmittedRegistration] = React.useState<any | null>(null)
   const [registrations, setRegistrations] = React.useState<any[]>([])
@@ -51,7 +67,6 @@ export default function StudentForm() {
   const [editFileData, setEditFileData] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    // load existing registration for student on mount
     const load = async () => {
       if (!user?.email) return
       await fetchRegistrations()
@@ -67,34 +82,30 @@ export default function StudentForm() {
         headers: { "X-User-Email": user.email },
       })
       const json = await res.json()
-        if (res.ok && Array.isArray(json.registrations)) {
-          const regs = json.registrations
-          setRegistrations(regs)
-          if (selectedRegistrationId) {
-            const sel = regs.find((r: any) => r.id === selectedRegistrationId)
-            if (sel) {
-              setSubmittedRegistration(sel)
-            } else if (regs.length > 0) {
-              setSelectedRegistrationId(regs[0].id)
-              setSubmittedRegistration(regs[0])
-            } else {
-              setSelectedRegistrationId(null)
-              setSubmittedRegistration(null)
-            }
+      if (res.ok && Array.isArray(json.registrations)) {
+        const regs = json.registrations
+        setRegistrations(regs)
+        if (selectedRegistrationId) {
+          const sel = regs.find((r: any) => r.id === selectedRegistrationId)
+          if (sel) {
+            setSubmittedRegistration(sel)
+          } else if (regs.length > 0) {
+            setSelectedRegistrationId(regs[0].id)
+            setSubmittedRegistration(regs[0])
           } else {
-            // if the user is creating a new registration, don't auto-select the first item
-            if (isCreating) {
-              // keep submittedRegistration/select as null so the create form remains visible
-              return
-            }
-            if (regs.length > 0) {
-              setSelectedRegistrationId(regs[0].id)
-              setSubmittedRegistration(regs[0])
-            } else {
-              setSelectedRegistrationId(null)
-              setSubmittedRegistration(null)
-            }
+            setSelectedRegistrationId(null)
+            setSubmittedRegistration(null)
           }
+        } else {
+          if (isCreating) return
+          if (regs.length > 0) {
+            setSelectedRegistrationId(regs[0].id)
+            setSubmittedRegistration(regs[0])
+          } else {
+            setSelectedRegistrationId(null)
+            setSubmittedRegistration(null)
+          }
+        }
       }
     } catch (e) {
       // ignore
@@ -130,7 +141,6 @@ export default function StudentForm() {
     fetchAttachments(selectedRegistrationId)
   }, [selectedRegistrationId, user])
 
-  // Poll registrations so students see updated status/remarks shortly after supervisors act
   React.useEffect(() => {
     if (!user?.email) return
     const iv = setInterval(() => {
@@ -157,8 +167,7 @@ export default function StudentForm() {
       })
       const data = await res.json()
       if (res.ok) {
-        setMessage("Submitted successfully")
-        // refresh list and select new registration
+        toast.success("Registration submitted successfully")
         await fetchRegistrations()
         if (data.registration) {
           setSubmittedRegistration(data.registration)
@@ -166,10 +175,10 @@ export default function StudentForm() {
           setIsCreating(false)
         }
       } else {
-        setMessage(data.message || "Submission failed")
+        toast.error(data.message || "Submission failed")
       }
     } catch (err) {
-      setMessage("Error connecting to server")
+      toast.error("Error connecting to server")
     }
     setLoading(false)
   }
@@ -182,15 +191,7 @@ export default function StudentForm() {
       setFileData(null)
       return
     }
-    const allowed = [
-      ".pdf",
-      ".doc",
-      ".docx",
-      ".odt",
-      ".xls",
-      ".xlsx",
-      ".zip",
-    ]
+    const allowed = [".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".zip"]
     const lower = f.name.toLowerCase()
     if (!allowed.some((ext) => lower.endsWith(ext))) {
       setFileError('Unsupported file type')
@@ -198,7 +199,6 @@ export default function StudentForm() {
       setFileData(null)
       return
     }
-    // limit file size to something reasonable (e.g., 10MB)
     if (f.size > 10 * 1024 * 1024) {
       setFileError('File too large (max 10MB)')
       setFileName(null)
@@ -209,7 +209,6 @@ export default function StudentForm() {
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
-      // strip prefix data:*/*;base64,
       const idx = result.indexOf('base64,')
       const b64 = idx >= 0 ? result.substring(idx + 7) : result
       setFileName(f.name)
@@ -231,15 +230,7 @@ export default function StudentForm() {
       setEditFileData(null)
       return
     }
-    const allowed = [
-      ".pdf",
-      ".doc",
-      ".docx",
-      ".odt",
-      ".xls",
-      ".xlsx",
-      ".zip",
-    ]
+    const allowed = [".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".zip"]
     const lower = f.name.toLowerCase()
     if (!allowed.some((ext) => lower.endsWith(ext))) {
       setFileError('Unsupported file type')
@@ -278,16 +269,16 @@ export default function StudentForm() {
         headers: { "X-User-Email": user?.email || "" },
       })
       if (res.ok) {
-        setMessage("Registration deleted")
+        toast.success("Registration deleted")
         setSubmittedRegistration(null)
         setDeleteOpen(false)
         await fetchRegistrations()
       } else {
         const data = await res.json()
-        setMessage(data.message || "Delete failed")
+        toast.error(data.message || "Delete failed")
       }
     } catch (err) {
-      setMessage("Error connecting to server")
+      toast.error("Error connecting to server")
     }
   }
 
@@ -315,15 +306,15 @@ export default function StudentForm() {
       })
       const data = await res.json()
       if (res.ok) {
-        setMessage("Registration updated")
+        toast.success("Registration updated")
         setSubmittedRegistration(data.registration)
         setEditOpen(false)
         await fetchRegistrations()
       } else {
-        setMessage(data.message || "Update failed")
+        toast.error(data.message || "Update failed")
       }
     } catch (err) {
-      setMessage("Error connecting to server")
+      toast.error("Error connecting to server")
     }
     setLoading(false)
   }
@@ -336,7 +327,7 @@ export default function StudentForm() {
         headers: { "X-User-Email": user.email },
       })
       if (!res.ok) {
-        setMessage('Failed to download')
+        toast.error('Failed to download')
         return
       }
       const blob = await res.blob()
@@ -349,224 +340,306 @@ export default function StudentForm() {
       a.remove()
       window.URL.revokeObjectURL(url)
     } catch (e) {
-      setMessage('Error downloading file')
+      toast.error('Error downloading file')
     } finally {
       setDownloadLoadingId(null)
     }
   }
 
-  const renderStatusBadge = (status: string | undefined) => {
+  const getStatusBadge = (status?: string) => {
     const s = (status || "").toLowerCase()
-    if (s === "pending_approval") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-yellow-800 bg-yellow-100">Pending Approval</span>
+    switch (s) {
+      case "pending_approval":
+        return <Badge variant="outline" className="border-yellow-400 text-yellow-600 gap-1"><Clock className="h-3 w-3" />Pending Approval</Badge>
+      case "approved":
+        return <Badge className="bg-green-500 gap-1"><CheckCircle2 className="h-3 w-3" />Approved</Badge>
+      case "registered":
+        return <Badge className="bg-emerald-500 gap-1"><CheckCircle2 className="h-3 w-3" />Verified</Badge>
+      case "rejected":
+        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
     }
-    if (s === "approved" || s === "registered") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-green-800 bg-green-100">Approved</span>
-    }
-    if (s === "rejected") {
-      return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-red-800 bg-red-100">Rejected</span>
-    }
-    return <span className="inline-flex items-center px-2 py-1 rounded text-sm font-medium text-gray-700 bg-gray-100">{status}</span>
   }
 
   return (
-    <div className="p-6 w-full flex">
-      <Card className="w-full max-w-full">
-        <CardHeader>
-          <CardTitle>FYP Registration</CardTitle>
-        </CardHeader>
-        <div className="flex flex-col md:flex-row md:gap-6 items-start">
-          <div className="md:w-1/4">
-            <div className="border rounded-md p-4 h-full">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm font-medium">Your Registrations</div>
-                <div className="ml-2">
-                  <Button size="sm" className="shrink-0" variant="outline" onClick={() => {
-                    // enter create mode
-                    setIsCreating(true)
-                    setSelectedRegistrationId(null)
-                    setSubmittedRegistration(null)
-                    setTitle("")
-                    setSupervisor("")
-                    setAbstract("")
-                    setFileName(null)
-                    setFileData(null)
-                  }}>New</Button>
-                </div>
-              </div>
-              {loading ? (
-                <div className="text-sm">Loading...</div>
-              ) : registrations.length === 0 ? (
-                <div className="text-sm">No registrations</div>
-              ) : (
-                <ul className="space-y-2">
-                  {registrations.map((r) => (
-                    <li key={r.id}>
-                        <button
-                          className={`w-full text-left p-2 rounded ${selectedRegistrationId === r.id ? 'bg-accent' : 'hover:bg-muted'}`}
-                          onClick={() => { setSelectedRegistrationId(r.id); setSubmittedRegistration(r); setIsCreating(false); }}
-                        >
-                        <div className="font-medium">{r.title}</div>
-                        <div className="text-xs text-muted-foreground">{r.supervisor}</div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          <div className="md:w-3/4">
-            <div className="border rounded-md p-6 min-h-[220px]">
-              {!submittedRegistration ? (
-                <>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <Label>Project Title</Label>
-                        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Supervisor Email</Label>
-                        <Input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Abstract</Label>
-                        <textarea className="w-full rounded-md p-2 border" value={abstract} onChange={(e) => setAbstract(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Attach file (optional)</Label>
-                        <div className="mt-2 flex items-center gap-3">
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
-                            onChange={onFileChange}
-                            className="hidden"
-                          />
-                          <Button size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
-                            Browse file
-                          </Button>
-                          <div className="text-sm">{fileName ? `Selected: ${fileName}` : 'No file chosen'}</div>
-                        </div>
-                        {fileError && <div className="text-sm text-red-600 mt-1">{fileError}</div>}
-                      </div>
-                      {message && <div className="text-sm text-muted-foreground">{message}</div>}
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <div className="flex gap-2">
-                      <Button onClick={submit}>Submit Registration</Button>
-                      <Button variant="outline" onClick={() => {
-                        // cancel creating
-                        setIsCreating(false)
-                        setTitle("")
-                        setSupervisor("")
-                        setAbstract("")
-                        setFileName(null)
-                        setFileData(null)
-                      }}>Cancel</Button>
-                    </div>
-                  </CardFooter>
-                </>
-              ) : (
-                <>
-                  <CardContent>
-                    <div className="p-4">
-                    <div className="font-medium">Submitted: {submittedRegistration.title}</div>
-                    <div className="text-sm text-muted-foreground">Supervisor: {submittedRegistration.supervisor}</div>
-                    <div className="mt-2">{renderStatusBadge(submittedRegistration.status)}</div>
-                    {submittedRegistration.remarks && <div className="mt-2 text-sm text-muted-foreground">Remarks: {submittedRegistration.remarks}</div>}
-                    {submittedRegistration.abstract && <div className="mt-2">{submittedRegistration.abstract}</div>}
-                  </div>
-                  </CardContent>
-                  <CardFooter>
-                    <div className="w-full flex items-center justify-between gap-2">
-                      <div>
-                        {attachmentsLoading ? (
-                          <div className="text-sm">Loading attachments...</div>
-                        ) : attachments.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">No attachments</div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            {attachments.map((a) => (
-                              <div key={a.id} className="flex items-center gap-2">
-                                <div className="text-sm">{a.filename}</div>
-                                <Button size="sm" onClick={() => downloadAttachment(a.id, a.filename)} disabled={downloadLoadingId === a.id}>
-                                  {downloadLoadingId === a.id ? 'Downloading...' : 'View'}
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" onClick={openEditDialog}>Edit</Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">Delete</Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete your registration.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <div className="flex items-center justify-end gap-2 mt-4">
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-                            </div>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                  </CardFooter>
-                </>
-              )}
-            </div>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">FYP Registration</h1>
+          <p className="text-muted-foreground">Submit and manage your project registrations</p>
         </div>
-        {/* Edit Dialog */}
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Registration</DialogTitle>
-              <DialogDescription>Update title, abstract or attach a new file.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div>
-                <Label>Project Title</Label>
-                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-              </div>
-              <div>
-                <Label>Abstract</Label>
-                <textarea className="w-full rounded-md p-2 border" value={editAbstract} onChange={(e) => setEditAbstract(e.target.value)} />
-              </div>
-              <div>
-                <Label>Attach new file (optional)</Label>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    ref={editFileInputRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
-                    onChange={onEditFileChange}
-                    className="hidden"
-                  />
-                  <Button size="sm" type="button" onClick={() => editFileInputRef.current?.click()}>
-                    Browse file
-                  </Button>
-                  <div className="text-sm">{editFileName ? `Selected: ${editFileName}` : 'No file chosen'}</div>
-                </div>
-                {fileError && <div className="text-sm text-red-600 mt-1">{fileError}</div>}
-              </div>
+        <Button onClick={fetchRegistrations} variant="outline" className="gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Total Registrations</CardDescription>
+            <CardTitle className="text-2xl">{registrations.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Approved</CardDescription>
+            <CardTitle className="text-2xl">{registrations.filter(r => r.status === "approved" || r.status === "registered").length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="border-l-4 border-l-yellow-500">
+          <CardHeader className="pb-2">
+            <CardDescription>Pending</CardDescription>
+            <CardTitle className="text-2xl">{registrations.filter(r => r.status === "pending_approval").length}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid gap-6 md:grid-cols-4">
+        {/* Sidebar - Registration List */}
+        <Card className="md:col-span-1">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">My Registrations</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => {
+                setIsCreating(true)
+                setSelectedRegistrationId(null)
+                setSubmittedRegistration(null)
+                setTitle("")
+                setSupervisor("")
+                setAbstract("")
+                setFileName(null)
+                setFileData(null)
+              }} className="gap-1">
+                <Plus className="h-4 w-4" />
+                New
+              </Button>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-              <Button onClick={handleSaveEdit}>Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : registrations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No registrations yet</p>
+            ) : (
+              <div className="space-y-2">
+                {registrations.map((r) => (
+                  <button
+                    key={r.id}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedRegistrationId === r.id ? 'bg-primary/10 border-primary' : 'hover:bg-muted border-transparent'}`}
+                    onClick={() => { setSelectedRegistrationId(r.id); setSubmittedRegistration(r); setIsCreating(false); }}
+                  >
+                    <div className="font-medium text-sm truncate">{r.title}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                      <Users className="h-3 w-3" />
+                      {r.supervisor}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Main Panel */}
+        <Card className="md:col-span-3">
+          {!submittedRegistration ? (
+            <>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  New Registration
+                </CardTitle>
+                <CardDescription>Submit a new FYP project registration</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Project Title</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter your project title" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Supervisor Email</Label>
+                  <Input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} placeholder="supervisor@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Abstract</Label>
+                  <Textarea value={abstract} onChange={(e) => setAbstract(e.target.value)} placeholder="Describe your project..." rows={4} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Attachment (optional)</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
+                      onChange={onFileChange}
+                      className="hidden"
+                    />
+                    <Button size="sm" variant="outline" type="button" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                      <Upload className="h-4 w-4" />
+                      Browse
+                    </Button>
+                    <span className="text-sm text-muted-foreground">{fileName ? fileName : 'No file chosen'}</span>
+                  </div>
+                  {fileError && <p className="text-sm text-red-600">{fileError}</p>}
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between border-t pt-4">
+                <Button variant="outline" onClick={() => {
+                  setIsCreating(false)
+                  setTitle("")
+                  setSupervisor("")
+                  setAbstract("")
+                  setFileName(null)
+                  setFileData(null)
+                }}>Cancel</Button>
+                <Button onClick={submit} disabled={loading} className="gap-2">
+                  <Send className="h-4 w-4" />
+                  {loading ? "Submitting..." : "Submit Registration"}
+                </Button>
+              </CardFooter>
+            </>
+          ) : (
+            <>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-xl">{submittedRegistration.title}</CardTitle>
+                    <CardDescription className="flex items-center gap-2">
+                      <Users className="h-3 w-3" />
+                      {submittedRegistration.supervisor}
+                    </CardDescription>
+                  </div>
+                  {getStatusBadge(submittedRegistration.status)}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Remarks */}
+                {submittedRegistration.remarks && (
+                  <div className="p-3 bg-muted/50 border rounded-lg">
+                    <p className="text-sm"><span className="font-medium">Supervisor Remarks:</span> {submittedRegistration.remarks}</p>
+                  </div>
+                )}
+
+                {/* Abstract */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Abstract
+                  </h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap p-3 bg-muted/50 rounded-lg border">
+                    {submittedRegistration.abstract || "(No abstract provided)"}
+                  </p>
+                </div>
+
+                {/* Attachments */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <File className="h-4 w-4" />
+                    Attachments
+                  </h4>
+                  {attachmentsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                  ) : attachments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No attachments</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {attachments.map((a) => (
+                        <Button key={a.id} size="sm" variant="outline" onClick={() => downloadAttachment(a.id, a.filename)} disabled={downloadLoadingId === a.id} className="gap-2">
+                          <Download className="h-3 w-3" />
+                          {downloadLoadingId === a.id ? 'Downloading...' : a.filename}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end gap-2 border-t pt-4">
+                <Button size="sm" variant="outline" onClick={openEditDialog} className="gap-2">
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)} className="gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              </CardFooter>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Edit Registration
+            </DialogTitle>
+            <DialogDescription>Update your registration details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Project Title</Label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Abstract</Label>
+              <Textarea value={editAbstract} onChange={(e) => setEditAbstract(e.target.value)} rows={4} />
+            </div>
+            <div className="space-y-2">
+              <Label>Attach new file (optional)</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.odt,.xls,.xlsx,.zip"
+                  onChange={onEditFileChange}
+                  className="hidden"
+                />
+                <Button size="sm" variant="outline" type="button" onClick={() => editFileInputRef.current?.click()} className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  Browse
+                </Button>
+                <span className="text-sm text-muted-foreground">{editFileName || 'No file chosen'}</span>
+              </div>
+              {fileError && <p className="text-sm text-red-600">{fileError}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={loading}>
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete Registration
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this registration? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center justify-end gap-2 mt-4">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

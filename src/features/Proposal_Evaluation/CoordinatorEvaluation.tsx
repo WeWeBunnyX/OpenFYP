@@ -5,6 +5,9 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     Dialog,
     DialogContent,
@@ -13,6 +16,31 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import {
+    Calendar,
+    Clock,
+    FileText,
+    Users,
+    CheckCircle2,
+    XCircle,
+    AlertCircle,
+    Download,
+    RefreshCw,
+    Trash2,
+    CalendarPlus,
+    GraduationCap,
+    Eye,
+    EyeOff,
+    ChevronDown,
+    ChevronUp,
+} from "lucide-react"
 
 type Registration = {
     id: number
@@ -381,256 +409,343 @@ export default function CoordinatorEvaluation() {
     }
 
     return (
-        <div>
-            <h2 className="text-xl font-semibold mb-3">Proposal Evaluation (Assign defense)</h2>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">Proposal Evaluation</h1>
+                    <p className="text-muted-foreground">Manage defense schedules and evaluate student proposals</p>
+                </div>
+                <Button onClick={() => { fetchRegistrations(); fetchEvaluations(); }} variant="outline" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                </Button>
+            </div>
 
-            {loading && <div className="mb-2">Loading proposals…</div>}
+            {/* Stats Cards */}
+            <div className="grid gap-4 md:grid-cols-4">
+                <Card className="border-l-4 border-l-blue-500">
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Proposals</CardDescription>
+                        <CardTitle className="text-2xl">{registrations.length}</CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card className="border-l-4 border-l-green-500">
+                    <CardHeader className="pb-2">
+                        <CardDescription>Scheduled Defenses</CardDescription>
+                        <CardTitle className="text-2xl">{registrations.filter(r => r.defense).length}</CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card className="border-l-4 border-l-orange-500">
+                    <CardHeader className="pb-2">
+                        <CardDescription>Pending Evaluations</CardDescription>
+                        <CardTitle className="text-2xl">{evaluations.filter(e => e.status !== 'evaluated').length}</CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card className="border-l-4 border-l-purple-500">
+                    <CardHeader className="pb-2">
+                        <CardDescription>Completed</CardDescription>
+                        <CardTitle className="text-2xl">{evaluations.filter(e => e.status === 'evaluated').length}</CardTitle>
+                    </CardHeader>
+                </Card>
+            </div>
 
-            <div className="overflow-auto border rounded w-full min-w-0">
-                <table className="w-full table-auto">
-                    <thead className="text-left bg-gray-50">
-                        <tr>
-                            <th className="p-2">#</th>
-                            <th className="p-2">Title</th>
-                            <th className="p-2">Proposal</th>
-                            <th className="p-2">Student</th>
-                            <th className="p-2">Status</th>
-                            <th className="p-2">Defense</th>
-                            <th className="p-2">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {registrations.length === 0 && (
-                            <tr><td colSpan={7} className="p-4 text-center text-sm text-muted-foreground">No proposals found</td></tr>
-                        )}
-                        {registrations.map(reg => {
-                            const s = assignState[reg.id]
-                            const absVisible = !!abstractVisible[reg.id]
-                            return (
-                                <React.Fragment key={reg.id}>
-                                    <tr className="border-t">
-                                        <td className="p-2 align-top">{reg.id}</td>
-                                        <td className="p-2 align-top">{reg.title}</td>
-                                        <td className="p-2 align-top text-sm">{truncate(reg.abstract)}</td>
-                                        <td className="p-2 align-top">{reg.owner}</td>
-                                        <td className="p-2 align-top">
-                                            {reg.defense ? (
-                                                <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 border border-sky-200 text-sky-800">Assigned</div>
-                                            ) : reg.status === "registered" || reg.status === "scheduled" ? (
-                                                <div className="text-sm text-green-600">{reg.status === "registered" ? "Verified" : "Scheduled"}</div>
-                                            ) : (
-                                                reg.status || "-"
-                                            )}
-                                        </td>
-                                        <td className="p-2 align-top text-sm">
-                                            {reg.defense ? (
-                                                <div>
-                                                    <div>{new Date(reg.defense.start).toLocaleString()}</div>
-                                                    <div className="text-xs text-muted-foreground">Committee: {reg.defense.committee.join(", ")}</div>
+            {/* Main Tabs */}
+            <Tabs defaultValue="proposals" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="proposals" className="gap-2">
+                        <CalendarPlus className="h-4 w-4" />
+                        Assign Defense
+                    </TabsTrigger>
+                    <TabsTrigger value="evaluations" className="gap-2">
+                        <GraduationCap className="h-4 w-4" />
+                        Evaluations
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* Proposals Tab */}
+                <TabsContent value="proposals" className="space-y-4">
+                    {loading ? (
+                        <Card className="p-8 text-center text-muted-foreground">Loading proposals...</Card>
+                    ) : registrations.length === 0 ? (
+                        <Card className="p-8 text-center">
+                            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                            <p className="text-muted-foreground">No proposals found</p>
+                        </Card>
+                    ) : (
+                        <div className="space-y-4">
+                            {registrations.map(reg => {
+                                const s = assignState[reg.id]
+                                const absVisible = !!abstractVisible[reg.id]
+                                return (
+                                    <Card key={reg.id} className="overflow-hidden">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-start justify-between">
+                                                <div className="space-y-1">
+                                                    <CardTitle className="text-lg flex items-center gap-2">
+                                                        {reg.title}
+                                                        <Badge variant="outline" className="text-xs">#{reg.id}</Badge>
+                                                    </CardTitle>
+                                                    <CardDescription>{reg.owner}</CardDescription>
                                                 </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">Not scheduled</span>
-                                            )}
-                                        </td>
-                                        <td className="p-2 align-top">
-                                            <div className="flex gap-2">
-                                                <Button onClick={() => openAssign(reg.id)} size="sm" variant={reg.defense ? "secondary" : "default"}>
-                                                    {reg.defense ? "Reassign" : "Assign"}
-                                                </Button>
-                                                {reg.status === "registered" ? (
-                                                    <div className="text-sm text-green-600 self-center">Verified</div>
-                                                ) : reg.status === "rejected" ? (
-                                                    <div className="text-sm text-red-600 italic self-center">Rejected proposals cannot be verified</div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        {reg.status === "approved" && (
-                                                            <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm">Verify</Button>
-                                                        )}
-
-                                                        {(reg.status === "scheduled" || (reg.defense && !(reg.status === "registered"))) ? (
-                                                            <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 border border-teal-200 text-teal-800">Scheduled</div>
-                                                        ) : null}
-
-                                                        {!(reg.status === "approved" || reg.status === "scheduled" || reg.defense) && (
-                                                            <div className="text-sm text-muted-foreground self-center">{reg.status || "-"}</div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <Button variant="ghost" onClick={() => toggleAbstract(reg.id)} size="sm">
-                                                    {absVisible ? "Hide" : "View"}
-                                                </Button>
+                                                <div className="flex items-center gap-2">
+                                                    {reg.defense ? (
+                                                        <Badge className="bg-sky-500"><Calendar className="h-3 w-3 mr-1" />Assigned</Badge>
+                                                    ) : reg.status === "registered" ? (
+                                                        <Badge className="bg-green-500"><CheckCircle2 className="h-3 w-3 mr-1" />Verified</Badge>
+                                                    ) : reg.status === "scheduled" ? (
+                                                        <Badge className="bg-blue-500"><Clock className="h-3 w-3 mr-1" />Scheduled</Badge>
+                                                    ) : (
+                                                        <Badge variant="secondary">{reg.status || "Pending"}</Badge>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {/* Defense Info */}
+                                            {reg.defense && (
+                                                <div className="flex items-center gap-3 p-3 rounded-lg bg-sky-50 border border-sky-200">
+                                                    <Calendar className="h-5 w-5 text-sky-600" />
+                                                    <div>
+                                                        <p className="text-sm font-medium">{new Date(reg.defense.start).toLocaleString()}</p>
+                                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                            <Users className="h-3 w-3" />
+                                                            {reg.defense.committee.join(", ")}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
 
-                                    {absVisible && (
-                                        <tr>
-                                            <td colSpan={7} className="p-3 bg-gray-50 text-sm whitespace-pre-wrap">
-                                                <strong>Proposal abstract:</strong>
-                                                <div className="mt-1">{reg.abstract || "(no abstract provided)"}</div>
-                                                <div className="mt-3">
-                                                    <strong className="text-sm">Attachments:</strong>
-                                                    <div className="mt-1">
+                                            {/* Abstract Toggle */}
+                                            <Button variant="ghost" size="sm" onClick={() => toggleAbstract(reg.id)} className="gap-2">
+                                                {absVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                {absVisible ? "Hide Details" : "View Details"}
+                                                {absVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                            </Button>
+
+                                            {absVisible && (
+                                                <div className="space-y-3 p-4 rounded-lg bg-muted/50 border">
+                                                    <div>
+                                                        <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                                                            <FileText className="h-4 w-4" />
+                                                            Abstract
+                                                        </h4>
+                                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                                            {reg.abstract || "(No abstract provided)"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-medium flex items-center gap-2 mb-2">
+                                                            <Download className="h-4 w-4" />
+                                                            Attachments
+                                                        </h4>
                                                         {attachmentsLoadingMap[reg.id] ? (
-                                                            <div className="text-sm">Loading attachments...</div>
+                                                            <p className="text-sm text-muted-foreground">Loading...</p>
                                                         ) : !attachmentsMap[reg.id] || attachmentsMap[reg.id].length === 0 ? (
-                                                            <div className="text-sm text-muted-foreground">No attachments</div>
+                                                            <p className="text-sm text-muted-foreground">No attachments</p>
                                                         ) : (
-                                                            <div className="flex flex-col gap-2">
+                                                            <div className="space-y-2">
                                                                 {attachmentsMap[reg.id].map((a: any) => (
                                                                     <div key={a.id} className="flex items-center gap-2">
-                                                                        <div className="text-sm">{a.filename}</div>
-                                                                        <Button size="sm" onClick={() => downloadAttachment(a.id, a.filename)}>View / Download</Button>
+                                                                        <Button size="sm" variant="outline" onClick={() => downloadAttachment(a.id, a.filename)}>
+                                                                            <Download className="h-3 w-3 mr-1" />
+                                                                            {a.filename}
+                                                                        </Button>
                                                                     </div>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    )}
+                                            )}
 
-                                    {s && (
-                                        <tr>
-                                            <td colSpan={7} className="p-3 bg-gray-50">
-                                                <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
-                                                    <div>
-                                                        <Label className="text-sm">Start</Label>
-                                                        <Input type="datetime-local" value={s.start} onChange={(e) => updateAssign(reg.id, { start: e.target.value })} />
-                                                    </div>
-                                                    <div>
-                                                        <Label className="text-sm">Slot minutes</Label>
-                                                        <Input type="number" min={5} value={s.slotMinutes} onChange={(e) => updateAssign(reg.id, { slotMinutes: Number(e.target.value) })} />
-                                                    </div>
-                                                    <div className="md:col-span-2">
-                                                        <Label className="text-sm">Committee emails (comma separated)</Label>
-                                                        <Input value={s.committeeCsv} onChange={(e) => updateAssign(reg.id, { committeeCsv: e.target.value })} placeholder="member1@example.com, member2@example.com" />
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <Button onClick={() => handleAssign(reg.id)} disabled={s.loading}>
-                                                            {s.loading ? "Scheduling..." : "Save"}
-                                                        </Button>
-                                                        <Button variant="ghost" onClick={() => {
-                                                            const copy = { ...assignState }
-                                                            delete copy[reg.id]
-                                                            setAssignState(copy)
-                                                        }}>Cancel</Button>
-                                                    </div>
-                                                </div>
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-2 pt-2 border-t">
+                                                <Button onClick={() => openAssign(reg.id)} size="sm" variant={reg.defense ? "outline" : "default"} className="gap-2">
+                                                    <CalendarPlus className="h-4 w-4" />
+                                                    {reg.defense ? "Reassign" : "Schedule Defense"}
+                                                </Button>
+                                                {reg.status === "approved" && !reg.defense && (
+                                                    <Button variant="outline" onClick={() => verifyRegistration(reg.id)} size="sm" className="gap-2">
+                                                        <CheckCircle2 className="h-4 w-4" />
+                                                        Verify
+                                                    </Button>
+                                                )}
+                                            </div>
 
-                                                {s.error && <div className="text-red-600 mt-2">{s.error}</div>}
-                                                {s.success && <div className="text-green-600 mt-2">{s.success}</div>}
-
-                                                <div className="mt-6 border-t pt-3">
-                                                    <div className="text-sm font-medium mb-2">Interim evaluation scheduling</div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
-                                                        <div>
-                                                            <Label className="text-sm">Start</Label>
-                                                            <Input type="datetime-local" value={interimAssignState[reg.id]?.start || ""} onChange={(e) => updateInterimAssign(reg.id, { start: e.target.value })} />
+                                            {/* Schedule Form */}
+                                            {s && (
+                                                <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+                                                    <CardHeader className="pb-3">
+                                                        <CardTitle className="text-sm">Defense Scheduling</CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="space-y-4">
+                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                                            <div>
+                                                                <Label className="text-xs">Start Date & Time</Label>
+                                                                <Input type="datetime-local" value={s.start} onChange={(e) => updateAssign(reg.id, { start: e.target.value })} className="mt-1" />
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-xs">Duration (min)</Label>
+                                                                <Input type="number" min={5} value={s.slotMinutes} onChange={(e) => updateAssign(reg.id, { slotMinutes: Number(e.target.value) })} className="mt-1" />
+                                                            </div>
+                                                            <div className="md:col-span-2">
+                                                                <Label className="text-xs">Committee Emails</Label>
+                                                                <Input value={s.committeeCsv} onChange={(e) => updateAssign(reg.id, { committeeCsv: e.target.value })} placeholder="email1@example.com, email2@example.com" className="mt-1" />
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <Label className="text-sm">Slot minutes</Label>
-                                                            <Input type="number" min={5} value={interimAssignState[reg.id]?.slotMinutes || 30} onChange={(e) => updateInterimAssign(reg.id, { slotMinutes: Number(e.target.value) })} />
-                                                        </div>
-                                                        <div className="md:col-span-2">
-                                                            <Label className="text-sm">Evaluator emails (comma separated)</Label>
-                                                            <Input value={interimAssignState[reg.id]?.evaluatorsCsv || ""} onChange={(e) => updateInterimAssign(reg.id, { evaluatorsCsv: e.target.value })} placeholder="member1@example.com, member2@example.com" />
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <Button onClick={() => handleInterimAssign(reg.id)} disabled={interimAssignState[reg.id]?.loading}>
-                                                                {interimAssignState[reg.id]?.loading ? "Scheduling..." : "Save Interim"}
+                                                        <div className="flex items-center gap-2">
+                                                            <Button onClick={() => handleAssign(reg.id)} disabled={s.loading} size="sm">
+                                                                {s.loading ? "Saving..." : "Save Schedule"}
                                                             </Button>
+                                                            <Button variant="ghost" size="sm" onClick={() => {
+                                                                const copy = { ...assignState }
+                                                                delete copy[reg.id]
+                                                                setAssignState(copy)
+                                                            }}>Cancel</Button>
+                                                            {s.error && <Badge variant="destructive">{s.error}</Badge>}
+                                                            {s.success && <Badge className="bg-green-500">{s.success}</Badge>}
                                                         </div>
-                                                    </div>
-                                                    {interimAssignState[reg.id]?.error && <div className="text-red-600 mt-2">{interimAssignState[reg.id]?.error}</div>}
-                                                    {interimAssignState[reg.id]?.success && <div className="text-green-600 mt-2">{interimAssignState[reg.id]?.success}</div>}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </React.Fragment>
-                            )
-                        })}
-                    </tbody>
-                </table>
-            </div>
 
-            <div className="mt-6">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold">Record / View Evaluations</h3>
-                    <div>
-                        <Button size="sm" onClick={async () => {
-                            // Clear stale data first
+                                                        {/* Interim Scheduling */}
+                                                        <div className="pt-4 border-t">
+                                                            <h4 className="text-sm font-medium mb-3">Interim Evaluation</h4>
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                                                <div>
+                                                                    <Label className="text-xs">Start</Label>
+                                                                    <Input type="datetime-local" value={interimAssignState[reg.id]?.start || ""} onChange={(e) => updateInterimAssign(reg.id, { start: e.target.value })} className="mt-1" />
+                                                                </div>
+                                                                <div>
+                                                                    <Label className="text-xs">Duration (min)</Label>
+                                                                    <Input type="number" min={5} value={interimAssignState[reg.id]?.slotMinutes || 30} onChange={(e) => updateInterimAssign(reg.id, { slotMinutes: Number(e.target.value) })} className="mt-1" />
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <Label className="text-xs">Evaluator Emails</Label>
+                                                                    <Input value={interimAssignState[reg.id]?.evaluatorsCsv || ""} onChange={(e) => updateInterimAssign(reg.id, { evaluatorsCsv: e.target.value })} placeholder="evaluator@example.com" className="mt-1" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-3">
+                                                                <Button onClick={() => handleInterimAssign(reg.id)} disabled={interimAssignState[reg.id]?.loading} size="sm" variant="outline">
+                                                                    {interimAssignState[reg.id]?.loading ? "Saving..." : "Save Interim"}
+                                                                </Button>
+                                                                {interimAssignState[reg.id]?.error && <Badge variant="destructive">{interimAssignState[reg.id]?.error}</Badge>}
+                                                                {interimAssignState[reg.id]?.success && <Badge className="bg-green-500">{interimAssignState[reg.id]?.success}</Badge>}
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* Evaluations Tab */}
+                <TabsContent value="evaluations" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold">Record Evaluations</h3>
+                        <Button size="sm" variant="outline" className="gap-2" onClick={async () => {
                             setEvaluations([]);
                             setEvaluationDrafts({});
-                            // Fetch fresh data from database
                             await Promise.all([fetchEvaluations(), fetchRegistrations()]);
                             toast.success("Data refreshed");
-                        }}>Refresh</Button>
+                        }}>
+                            <RefreshCw className="h-4 w-4" />
+                            Refresh
+                        </Button>
                     </div>
-                </div>
-                {evaluations.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No evaluations to record</div>
-                ) : (
-                    <div className="space-y-3">
-                        {evaluations.map(ev => {
-                            const reg = registrations.find(r => r.id === ev.registration_id)
-                            const draft = evaluationDrafts[ev.id] || {}
-                            return (
-                                <div key={ev.id} className="p-3 border rounded-md">
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <div className="font-medium">{reg ? reg.title : `Registration #${ev.registration_id}`}</div>
-                                            <div className="text-sm text-muted-foreground">Student: {ev.student_email}</div>
-                                            <div className="text-sm text-muted-foreground">Scheduled: {ev.scheduled_start ? new Date(ev.scheduled_start).toLocaleString() : '-'}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            {ev.status === 'evaluated' ? (
-                                                <div className="text-sm">Status: <strong>{ev.result === 'approved' ? 'Approved' : 'Rejected'}</strong></div>
-                                            ) : (
-                                                <div className="text-sm">Status: <strong>Pending</strong></div>
-                                            )}
-                                        </div>
-                                    </div>
 
-                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div className="md:col-span-1">
-                                            <Label className="text-sm">Result</Label>
-                                            <select className="w-full mt-1 p-2 border rounded" value={draft.result || (ev.result || '')} onChange={(e) => updateDraft(ev.id, { result: e.target.value })}>
-                                                <option value="">-- select --</option>
-                                                <option value="approved">Proposal Accepted</option>
-                                                <option value="rejected">Proposal Rejected</option>
-                                            </select>
-                                        </div>
-                                        <div className="md:col-span-2">
-                                            <Label className="text-sm">Remarks (optional)</Label>
-                                            <Textarea placeholder="Enter remarks for the student" value={draft.remarks ?? (ev.remarks ?? '')} onChange={(e) => updateDraft(ev.id, { remarks: e.target.value })} />
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-3 flex items-center gap-2">
-                                        <Button onClick={() => submitEvaluation(ev.id)} disabled={draft.loading}>
-                                            {draft.loading ? 'Saving…' : (ev.status === 'evaluated' ? 'Update' : 'Save')}
-                                        </Button>
-                                        <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(ev.id)}>
-                                            Delete
-                                        </Button>
-                                        {draft.error && <div className="text-red-600 text-sm">{draft.error}</div>}
-                                        {draft.success && <div className="text-green-600 text-sm">{draft.success}</div>}
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-            </div>
+                    {evaluations.length === 0 ? (
+                        <Card className="p-8 text-center">
+                            <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                            <p className="text-muted-foreground">No evaluations to record</p>
+                        </Card>
+                    ) : (
+                        <div className="space-y-4">
+                            {evaluations.map(ev => {
+                                const reg = registrations.find(r => r.id === ev.registration_id)
+                                const draft = evaluationDrafts[ev.id] || {}
+                                const isEvaluated = ev.status === 'evaluated'
+                                return (
+                                    <Card key={ev.id} className={`overflow-hidden border-l-4 ${isEvaluated ? 'border-l-green-500' : 'border-l-orange-400'}`}>
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <CardTitle className="text-base">{reg ? reg.title : `Registration #${ev.registration_id}`}</CardTitle>
+                                                    <CardDescription className="space-y-1">
+                                                        <span className="block">{ev.student_email}</span>
+                                                        <span className="flex items-center gap-1 text-xs">
+                                                            <Calendar className="h-3 w-3" />
+                                                            {ev.scheduled_start ? new Date(ev.scheduled_start).toLocaleString() : 'Not scheduled'}
+                                                        </span>
+                                                    </CardDescription>
+                                                </div>
+                                                {isEvaluated ? (
+                                                    ev.result === 'approved' ? (
+                                                        <Badge className="bg-green-500 gap-1"><CheckCircle2 className="h-3 w-3" />Approved</Badge>
+                                                    ) : (
+                                                        <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>
+                                                    )
+                                                ) : (
+                                                    <Badge variant="outline" className="border-orange-400 text-orange-600 gap-1">
+                                                        <AlertCircle className="h-3 w-3" />Pending
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div>
+                                                    <Label className="text-xs">Result</Label>
+                                                    <Select value={draft.result || ev.result || ''} onValueChange={(value) => updateDraft(ev.id, { result: value })}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Select result..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="approved">
+                                                                <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-500" />Accepted</span>
+                                                            </SelectItem>
+                                                            <SelectItem value="rejected">
+                                                                <span className="flex items-center gap-2"><XCircle className="h-4 w-4 text-red-500" />Rejected</span>
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <Label className="text-xs">Remarks</Label>
+                                                    <Textarea placeholder="Enter feedback..." value={draft.remarks ?? (ev.remarks ?? '')} onChange={(e) => updateDraft(ev.id, { remarks: e.target.value })} className="mt-1 min-h-[80px]" />
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 pt-2 border-t">
+                                                <Button onClick={() => submitEvaluation(ev.id)} disabled={draft.loading} size="sm">
+                                                    {draft.loading ? 'Saving...' : (isEvaluated ? 'Update' : 'Submit')}
+                                                </Button>
+                                                <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(ev.id)} className="gap-1">
+                                                    <Trash2 className="h-3 w-3" />Delete
+                                                </Button>
+                                                {draft.error && <Badge variant="destructive">{draft.error}</Badge>}
+                                                {draft.success && <Badge className="bg-green-500">{draft.success}</Badge>}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete Evaluation</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Trash2 className="h-5 w-5 text-destructive" />
+                            Delete Evaluation
+                        </DialogTitle>
                         <DialogDescription>
                             Are you sure you want to delete this evaluation? This action cannot be undone.
                         </DialogDescription>
