@@ -23,18 +23,30 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
+type ScheduleRecord = {
+  id: number;
+  start: string;
+  end: string;
+  slotMinutes: number;
+  evaluators: string[];
+  status: "scheduled" | "completed";
+};
+
 type Student = {
   email: string;
   name: string;
   projectTitle: string;
+  registrationId?: number;
   logsSubmitted: number; // Out of 24
   supervisorEvaluationsComplete: boolean;
   eligibleForStage1: boolean; // 12+ logs submitted
   eligibleForStage2: boolean; // All 24 logs submitted
   interimStage1Status: "pending" | "scheduled" | "completed";
   interimStage1Marks?: number;
+  interimStage1Schedule?: ScheduleRecord;
   interimStage2Status: "pending" | "scheduled" | "completed";
   interimStage2Marks?: number;
+  interimStage2Schedule?: ScheduleRecord;
 };
 
 type EvaluationStage = {
@@ -63,10 +75,22 @@ export default function CoordinatorInterimEval() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [slotMinutes, setSlotMinutes] = useState("60");
+  const [selectedEvaluators, setSelectedEvaluators] = useState<string[]>([]);
   const [marks, setMarks] = useState("");
   const [feedback, setFeedback] = useState("");
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingMarks, setSavingMarks] = useState(false);
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+
+  // Mock evaluators list
+  const mockEvaluators = [
+    { id: "dr.ahmed@uni.edu", name: "Dr. Ahmed Khan" },
+    { id: "dr.fatima@uni.edu", name: "Dr. Fatima Ali" },
+    { id: "prof.sara@uni.edu", name: "Prof. Sara Smith" },
+    { id: "dr.hasan@uni.edu", name: "Dr. Hasan Hassan" },
+    { id: "prof.james@uni.edu", name: "Prof. James Wilson" },
+  ];
 
   // Mock fetch - replace with actual API calls
   useEffect(() => {
@@ -89,7 +113,7 @@ export default function CoordinatorInterimEval() {
       console.log("Fetched students:", students_list);
 
       // Map to our Student type with eligibility logic
-      const studentsData: Student[] = students_list.map((studentData: any) => {
+      const studentsData: Student[] = await Promise.all(students_list.map(async (studentData: any) => {
         // Get unique months evaluated
         const uniqueMonths = new Set(
           studentData.evaluations.map((e: any) => e.evaluationMonth)
@@ -99,18 +123,34 @@ export default function CoordinatorInterimEval() {
         
         console.log(`${studentData.studentEmail}: ${uniqueMonths.size} months = ${logsSubmitted} logs`);
         
+        // Fetch existing interim schedules for this student
+        let schedules: ScheduleRecord[] = [];
+        try {
+          const scheduleResponse = await fetch(
+            `http://localhost:8000/api/interim-scheduling/${studentData.studentEmail}`
+          );
+          if (scheduleResponse.ok) {
+            schedules = await scheduleResponse.json();
+          }
+        } catch (e) {
+          console.log("No schedules found for", studentData.studentEmail);
+        }
+        
         return {
           email: studentData.studentEmail,
           name: studentData.studentName,
           projectTitle: studentData.projectTitle || "",
+          registrationId: studentData.registrationId,
           logsSubmitted: logsSubmitted || 0,
           supervisorEvaluationsComplete: uniqueMonths.size >= 7 || logsSubmitted >= 12,
           eligibleForStage1: logsSubmitted >= 12,
           eligibleForStage2: logsSubmitted >= 24,
-          interimStage1Status: "pending" as const,
-          interimStage2Status: "pending" as const,
+          interimStage1Status: schedules.length > 0 ? (schedules[0]?.status || "pending") : "pending",
+          interimStage1Schedule: schedules.length > 0 ? schedules[0] : undefined,
+          interimStage2Status: schedules.length > 1 ? (schedules[1]?.status || "pending") : "pending",
+          interimStage2Schedule: schedules.length > 1 ? schedules[1] : undefined,
         };
-      });
+      }));
 
       console.log("Processed students:", studentsData);
       setStudents(studentsData);
@@ -134,12 +174,43 @@ export default function CoordinatorInterimEval() {
     if (!selectedStudent) return;
     
     setSelectedStage(stage);
+    
+    const schedule = stage === 1 ? selectedStudent.interimStage1Schedule : selectedStudent.interimStage2Schedule;
+    
+    if (schedule) {
+      // Edit mode
+      setIsEditingSchedule(true);
+      setEditingScheduleId(schedule.id);
+      
+      const startDate = new Date(schedule.start);
+      const dateStr = startDate.toISOString().split('T')[0];
+      const timeStr = startDate.toTimeString().substring(0, 5);
+      
+      setScheduledDate(dateStr);
+      setScheduledTime(timeStr);
+      setSlotMinutes(schedule.slotMinutes.toString());
+      setSelectedEvaluators(schedule.evaluators || []);
+    } else {
+      // New schedule mode
+      setIsEditingSchedule(false);
+      setEditingScheduleId(null);
+      setScheduledDate("");
+      setScheduledTime("09:00");
+      setSlotMinutes("60");
+      setSelectedEvaluators([]);
+    }
+    
     setShowScheduleDialog(true);
   };
 
   const confirmSchedule = async () => {
     if (!selectedStudent || !selectedStage || !scheduledDate || !scheduledTime) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (selectedEvaluators.length === 0) {
+      toast.error("Please select at least one evaluator");
       return;
     }
 
@@ -165,10 +236,12 @@ export default function CoordinatorInterimEval() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           student_email: selectedStudent.email,
+          registration_id: selectedStudent.registrationId || null,
+          title: `${selectedStudent.projectTitle} - Stage ${selectedStage} Interim Evaluation`,
           start: startDateTime.toISOString(),
           slot_minutes: slotMin,
-          notes: `Stage ${selectedStage} interim evaluation`,
-          evaluators: [user?.email || ""],
+          notes: `Stage ${selectedStage} interim evaluation scheduled on ${scheduledDate}`,
+          evaluators: selectedEvaluators,
         }),
       });
 
@@ -177,14 +250,24 @@ export default function CoordinatorInterimEval() {
         throw new Error(errorData.detail || "Failed to schedule evaluation");
       }
 
-      toast.success(`✅ Interim Evaluation Stage ${selectedStage} scheduled for ${scheduledDate} at ${scheduledTime} (${slotMin} mins)`);
+      const newSchedule = await response.json();
+      
+      toast.success(`✅ Interim Evaluation Stage ${selectedStage} scheduled for ${scheduledDate} at ${scheduledTime}`);
       
       // Update local state
       setStudents(students.map(s => 
         s.email === selectedStudent.email
           ? {
               ...s,
-              [`interimStage${selectedStage}Status`]: "scheduled"
+              [`interimStage${selectedStage}Status`]: "scheduled",
+              [`interimStage${selectedStage}Schedule`]: {
+                id: newSchedule.id,
+                start: newSchedule.start,
+                end: newSchedule.end,
+                slotMinutes: newSchedule.slotMinutes,
+                evaluators: newSchedule.evaluators,
+                status: "scheduled" as const,
+              }
             }
           : s
       ));
@@ -192,13 +275,24 @@ export default function CoordinatorInterimEval() {
       // Update selected student state
       setSelectedStudent({
         ...selectedStudent,
-        [`interimStage${selectedStage}Status`]: "scheduled"
+        [`interimStage${selectedStage}Status`]: "scheduled",
+        [`interimStage${selectedStage}Schedule`]: {
+          id: newSchedule.id,
+          start: newSchedule.start,
+          end: newSchedule.end,
+          slotMinutes: newSchedule.slotMinutes,
+          evaluators: newSchedule.evaluators,
+          status: "scheduled" as const,
+        }
       });
 
       setShowScheduleDialog(false);
       setScheduledDate("");
       setScheduledTime("09:00");
       setSlotMinutes("60");
+      setSelectedEvaluators([]);
+      setIsEditingSchedule(false);
+      setEditingScheduleId(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to schedule evaluation";
       console.error("Schedule error:", err);
@@ -550,24 +644,26 @@ export default function CoordinatorInterimEval() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
-                {selectedStudent.interimStage1Status === "pending" && (
+                {(selectedStudent.interimStage1Status === "pending" || selectedStudent.interimStage1Status === "scheduled") && (
                   <Dialog open={showScheduleDialog && selectedStage === 1} onOpenChange={setShowScheduleDialog}>
                     <DialogTrigger asChild>
                       <Button onClick={() => handleScheduleStage(1)} disabled={!selectedStudent.eligibleForStage1}>
                         <Plus className="h-4 w-4 mr-2" />
-                        Schedule Stage 1
+                        {selectedStudent.interimStage1Status === "scheduled" ? "Edit Schedule" : "Schedule Stage 1"}
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Schedule Interim Evaluation - Stage 1</DialogTitle>
+                        <DialogTitle>
+                          {isEditingSchedule ? "Edit" : "Schedule"} Interim Evaluation - Stage 1
+                        </DialogTitle>
                         <DialogDescription>
-                          Set the date, time, and slot duration for the Stage 1 interim evaluation
+                          Set the date, time, slot duration, and evaluators for Stage 1 interim evaluation
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4">
+                      <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                         <div>
-                          <Label htmlFor="stage1-date">Evaluation Date</Label>
+                          <Label htmlFor="stage1-date">Evaluation Date *</Label>
                           <Input
                             id="stage1-date"
                             type="date"
@@ -578,7 +674,7 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="stage1-time">Start Time</Label>
+                          <Label htmlFor="stage1-time">Start Time *</Label>
                           <Input
                             id="stage1-time"
                             type="time"
@@ -589,7 +685,7 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="stage1-slot">Slot Duration (minutes)</Label>
+                          <Label htmlFor="stage1-slot">Slot Duration (minutes) *</Label>
                           <Input
                             id="stage1-slot"
                             type="number"
@@ -601,12 +697,47 @@ export default function CoordinatorInterimEval() {
                             disabled={savingSchedule}
                           />
                         </div>
+                        <div>
+                          <Label htmlFor="stage1-evaluators">Evaluators *</Label>
+                          <div className="mt-1 space-y-2 border rounded-md p-3 bg-muted/30 max-h-[180px] overflow-y-auto">
+                            {mockEvaluators.map((evaluator) => (
+                              <div key={evaluator.id} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={evaluator.id}
+                                  checked={selectedEvaluators.includes(evaluator.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedEvaluators([...selectedEvaluators, evaluator.id]);
+                                    } else {
+                                      setSelectedEvaluators(
+                                        selectedEvaluators.filter(e => e !== evaluator.id)
+                                      );
+                                    }
+                                  }}
+                                  disabled={savingSchedule}
+                                  className="rounded"
+                                />
+                                <Label htmlFor={evaluator.id} className="text-sm cursor-pointer flex-1 mb-0">
+                                  {evaluator.name}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                          {selectedEvaluators.length === 0 && (
+                            <p className="text-xs text-red-600 mt-1">Select at least one evaluator</p>
+                          )}
+                        </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={savingSchedule}>
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowScheduleDialog(false)} 
+                            disabled={savingSchedule}
+                          >
                             Cancel
                           </Button>
                           <Button onClick={confirmSchedule} disabled={savingSchedule}>
-                            {savingSchedule ? "Scheduling..." : "Confirm Schedule"}
+                            {savingSchedule ? "Saving..." : isEditingSchedule ? "Update Schedule" : "Confirm Schedule"}
                           </Button>
                         </div>
                       </div>
@@ -748,24 +879,26 @@ export default function CoordinatorInterimEval() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
-                {selectedStudent.interimStage2Status === "pending" && (
+                {(selectedStudent.interimStage2Status === "pending" || selectedStudent.interimStage2Status === "scheduled") && (
                   <Dialog open={showScheduleDialog && selectedStage === 2} onOpenChange={setShowScheduleDialog}>
                     <DialogTrigger asChild>
                       <Button onClick={() => handleScheduleStage(2)} disabled={!selectedStudent.eligibleForStage2}>
                         <Plus className="h-4 w-4 mr-2" />
-                        Schedule Stage 2
+                        {selectedStudent.interimStage2Status === "scheduled" ? "Edit Schedule" : "Schedule Stage 2"}
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Schedule Interim Evaluation - Stage 2</DialogTitle>
+                        <DialogTitle>
+                          {isEditingSchedule ? "Edit" : "Schedule"} Interim Evaluation - Stage 2
+                        </DialogTitle>
                         <DialogDescription>
-                          Set the date, time, and slot duration for the Stage 2 interim evaluation
+                          Set the date, time, slot duration, and evaluators for Stage 2 interim evaluation
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4">
+                      <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                         <div>
-                          <Label htmlFor="stage2-date">Evaluation Date</Label>
+                          <Label htmlFor="stage2-date">Evaluation Date *</Label>
                           <Input
                             id="stage2-date"
                             type="date"
@@ -776,7 +909,7 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="stage2-time">Start Time</Label>
+                          <Label htmlFor="stage2-time">Start Time *</Label>
                           <Input
                             id="stage2-time"
                             type="time"
@@ -787,7 +920,7 @@ export default function CoordinatorInterimEval() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="stage2-slot">Slot Duration (minutes)</Label>
+                          <Label htmlFor="stage2-slot">Slot Duration (minutes) *</Label>
                           <Input
                             id="stage2-slot"
                             type="number"
@@ -799,12 +932,47 @@ export default function CoordinatorInterimEval() {
                             disabled={savingSchedule}
                           />
                         </div>
+                        <div>
+                          <Label htmlFor="stage2-evaluators">Evaluators *</Label>
+                          <div className="mt-1 space-y-2 border rounded-md p-3 bg-muted/30 max-h-[180px] overflow-y-auto">
+                            {mockEvaluators.map((evaluator) => (
+                              <div key={evaluator.id} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`s2-${evaluator.id}`}
+                                  checked={selectedEvaluators.includes(evaluator.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedEvaluators([...selectedEvaluators, evaluator.id]);
+                                    } else {
+                                      setSelectedEvaluators(
+                                        selectedEvaluators.filter(e => e !== evaluator.id)
+                                      );
+                                    }
+                                  }}
+                                  disabled={savingSchedule}
+                                  className="rounded"
+                                />
+                                <Label htmlFor={`s2-${evaluator.id}`} className="text-sm cursor-pointer flex-1 mb-0">
+                                  {evaluator.name}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                          {selectedEvaluators.length === 0 && (
+                            <p className="text-xs text-red-600 mt-1">Select at least one evaluator</p>
+                          )}
+                        </div>
                         <div className="flex gap-3 justify-end">
-                          <Button variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={savingSchedule}>
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowScheduleDialog(false)} 
+                            disabled={savingSchedule}
+                          >
                             Cancel
                           </Button>
                           <Button onClick={confirmSchedule} disabled={savingSchedule}>
-                            {savingSchedule ? "Scheduling..." : "Confirm Schedule"}
+                            {savingSchedule ? "Saving..." : isEditingSchedule ? "Update Schedule" : "Confirm Schedule"}
                           </Button>
                         </div>
                       </div>

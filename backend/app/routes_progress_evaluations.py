@@ -32,6 +32,8 @@ class EvaluationUpdate(BaseModel):
 class InterimScheduleCreate(BaseModel):
     """Request model for creating interim scheduling"""
     student_email: str
+    registration_id: Optional[int] = None
+    title: Optional[str] = None
     start: datetime  # Scheduling date with time
     slot_minutes: int  # Duration of the slot
     notes: Optional[str] = None
@@ -374,6 +376,8 @@ def create_interim_scheduling(
     # Create interim scheduling record
     interim = InterimScheduling(
         student_email=schedule.student_email,
+        registration_id=schedule.registration_id,
+        title=schedule.title,
         start=schedule.start,
         end=end_time,
         slot_minutes=schedule.slot_minutes,
@@ -389,6 +393,8 @@ def create_interim_scheduling(
     return {
         "id": interim.id,
         "studentEmail": interim.student_email,
+        "registrationId": interim.registration_id,
+        "title": interim.title,
         "start": interim.start.isoformat(),
         "end": interim.end.isoformat(),
         "slotMinutes": interim.slot_minutes,
@@ -408,6 +414,8 @@ def get_all_interim_scheduling(session: Session = Depends(get_session)):
         {
             "id": s.id,
             "studentEmail": s.student_email,
+            "registrationId": s.registration_id,
+            "title": s.title,
             "start": s.start.isoformat() if s.start else None,
             "end": s.end.isoformat() if s.end else None,
             "slotMinutes": s.slot_minutes,
@@ -439,6 +447,8 @@ def get_interim_scheduling_by_student(
         {
             "id": s.id,
             "studentEmail": s.student_email,
+            "registrationId": s.registration_id,
+            "title": s.title,
             "start": s.start.isoformat() if s.start else None,
             "end": s.end.isoformat() if s.end else None,
             "slotMinutes": s.slot_minutes,
