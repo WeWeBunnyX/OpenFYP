@@ -345,17 +345,25 @@ export default function CoordinatorInterimEval() {
         throw new Error("No interim scheduling found for this student");
       }
       
-      // Use the most recent schedule
-      const scheduleId = schedules[0].id;
+      // Get the correct schedule based on stage (first for Stage 1, second for Stage 2)
+      const scheduleIndex = selectedStage === 1 ? 0 : 1;
+      if (!schedules[scheduleIndex]) {
+        throw new Error(`No interim scheduling found for Stage ${selectedStage}`);
+      }
+      
+      const scheduleId = schedules[scheduleIndex].id;
 
-      // API call to update interim scheduling with marks
-      const response = await fetch(`http://localhost:8000/api/interim-scheduling/${scheduleId}`, {
-        method: "PATCH",
+      // API call to submit marks to the dedicated interim-marks endpoint
+      const response = await fetch("http://localhost:8000/api/interim-marks/submit", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          interim_scheduling_id: scheduleId,
+          student_email: selectedStudent.email,
+          stage: selectedStage,
           marks: marksNum,
+          evaluator_email: user?.email || "coordinator@system.local",
           feedback: feedback || null,
-          evaluators: [user?.email || ""],
         }),
       });
 
@@ -364,6 +372,8 @@ export default function CoordinatorInterimEval() {
         throw new Error(errorData.detail || "Failed to submit marks");
       }
 
+      const savedMarks = await response.json();
+      
       toast.success(`✅ Interim Evaluation Stage ${selectedStage} marks submitted (${marks}/100)`);
       
       // Update local state
