@@ -106,6 +106,12 @@ def get_students_for_final_eval(
             ).first()
             
             if not existing:
+                # Fetch supervisor name from User table
+                supervisor = session.exec(
+                    select(User).where(User.email == reg.supervisor)
+                ).first()
+                supervisor_name = supervisor.name if supervisor else reg.supervisor
+                
                 # Create new final evaluation record
                 final_eval = FinalEvaluationViva(
                     registration_id=reg.id,
@@ -113,6 +119,7 @@ def get_students_for_final_eval(
                     student_name=reg.owner,  # Use owner email as name (update later if needed)
                     project_title=reg.title,
                     supervisor_email=reg.supervisor,
+                    supervisor_name=supervisor_name,
                     status="pending",
                     approval_status="pending",
                     committee_members=[],
@@ -141,6 +148,7 @@ def get_students_for_final_eval(
                 "student_email": e.student_email,
                 "student_name": e.student_name,
                 "project_title": e.project_title,
+                "supervisor_name": e.supervisor_name,
                 "status": e.status,
                 "committee_count": len(e.committee_members) if e.committee_members else 0,
                 "approval_status": e.approval_status,
@@ -223,7 +231,8 @@ def add_committee_member(
             "email": request.email,
             "role": request.role
         }
-        final_eval.committee_members.append(new_member)
+        # Important: Reassign the list to trigger SQLAlchemy mutation tracking
+        final_eval.committee_members = final_eval.committee_members + [new_member]
         final_eval.updated_at = datetime.utcnow()
         session.add(final_eval)
         session.commit()
@@ -300,7 +309,8 @@ def add_rubric_item(
             "maxMarks": request.maxMarks,
             "weight": request.weight
         }
-        final_eval.grading_rubric.append(new_item)
+        # Important: Reassign the list to trigger SQLAlchemy mutation tracking
+        final_eval.grading_rubric = final_eval.grading_rubric + [new_item]
         final_eval.updated_at = datetime.utcnow()
         session.add(final_eval)
         session.commit()
@@ -381,11 +391,14 @@ def submit_committee_marks(
         if not final_eval.committee_marks:
             final_eval.committee_marks = {}
         
-        final_eval.committee_marks[member_id] = {
+        # Important: Reassign the dict to trigger SQLAlchemy mutation tracking
+        new_marks = final_eval.committee_marks.copy()
+        new_marks[member_id] = {
             "marks": request.marks,
             "feedback": request.feedback or "",
             "submittedAt": datetime.utcnow().isoformat()
         }
+        final_eval.committee_marks = new_marks
         
         # Calculate weighted average if all committee members have submitted
         if len(final_eval.committee_marks) == len(final_eval.committee_members):

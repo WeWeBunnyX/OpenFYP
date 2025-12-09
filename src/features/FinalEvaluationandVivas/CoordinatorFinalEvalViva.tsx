@@ -154,7 +154,7 @@ export default function CoordinatorFinalEvalViva() {
     return errors.length === 0;
   };
 
-  const handleAddCommitteeMember = () => {
+  const handleAddCommitteeMember = async () => {
     if (!newCommitteeMember.name || !newCommitteeMember.email || !newCommitteeMember.role) {
       toast.error("Please fill all committee member details");
       return;
@@ -162,63 +162,155 @@ export default function CoordinatorFinalEvalViva() {
 
     if (!selectedStudent) return;
 
-    const member: CommitteeMember = {
-      id: `c${Date.now()}`,
-      name: newCommitteeMember.name,
-      email: newCommitteeMember.email,
-      role: newCommitteeMember.role,
-    };
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/committee/add`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newCommitteeMember.name,
+            email: newCommitteeMember.email,
+            role: newCommitteeMember.role,
+          }),
+        }
+      );
 
-    setSelectedStudent((prev) =>
-      prev
-        ? {
-            ...prev,
-            committee: [...prev.committee, member],
-          }
-        : null
-    );
+      if (!response.ok) {
+        throw new Error("Failed to add committee member");
+      }
 
-    setNewCommitteeMember({});
-    setShowAssignDialog(false);
-    toast.success("Committee member added");
+      const data = await response.json();
+
+      setSelectedStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              committee: data.committee_members || prev.committee,
+            }
+          : null
+      );
+
+      setNewCommitteeMember({});
+      setShowAssignDialog(false);
+      toast.success("Committee member added and saved!");
+    } catch (err) {
+      console.error("Error adding committee member:", err);
+      toast.error("Failed to add committee member");
+    }
   };
 
-  const handleRemoveCommitteeMember = (memberId: string) => {
+  const handleRemoveCommitteeMember = async (memberId: string) => {
     if (!selectedStudent) return;
 
-    setSelectedStudent((prev) =>
-      prev
-        ? {
-            ...prev,
-            committee: prev.committee.filter((m) => m.id !== memberId),
-          }
-        : null
-    );
-    toast.success("Committee member removed");
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/committee/${memberId}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to remove committee member");
+      }
+
+      const data = await response.json();
+
+      setSelectedStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              committee: data.committee_members || prev.committee,
+            }
+          : null
+      );
+
+      toast.success("Committee member removed");
+    } catch (err) {
+      console.error("Error removing committee member:", err);
+      toast.error("Failed to remove committee member");
+    }
   };
 
-  const handleAddRubricItem = () => {
+  const handleAddRubricItem = async () => {
     if (!newRubricItem.criteriaName || !newRubricItem.maxMarks || newRubricItem.weight === undefined) {
       toast.error("Please fill all rubric fields");
       return;
     }
 
-    const item: GradingRubric = {
-      id: `r${Date.now()}`,
-      criteriaName: newRubricItem.criteriaName,
-      maxMarks: newRubricItem.maxMarks,
-      weight: newRubricItem.weight,
-    };
+    if (!selectedStudent) return;
 
-    setRubric([...rubric, item]);
-    setNewRubricItem({});
-    setShowRubricDialog(false);
-    toast.success("Rubric item added");
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/rubric/add`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            criteriaName: newRubricItem.criteriaName,
+            maxMarks: newRubricItem.maxMarks,
+            weight: newRubricItem.weight,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to add rubric item");
+      }
+
+      const data = await response.json();
+      
+      const transformedRubric = (data.grading_rubric || []).map((item: any) => ({
+        id: item.id,
+        criteriaName: item.criteriaName,
+        maxMarks: item.maxMarks,
+        weight: item.weight,
+      }));
+
+      setRubric(transformedRubric);
+      setNewRubricItem({});
+      setShowRubricDialog(false);
+      toast.success("Rubric item added and saved!");
+    } catch (err) {
+      console.error("Error adding rubric item:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to add rubric item");
+    }
   };
 
-  const handleRemoveRubricItem = (id: string) => {
-    setRubric(rubric.filter((r) => r.id !== id));
-    toast.success("Rubric item removed");
+  const handleRemoveRubricItem = async (id: string) => {
+    if (!selectedStudent) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/rubric/${id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to remove rubric item");
+      }
+
+      const data = await response.json();
+      
+      const transformedRubric = (data.grading_rubric || []).map((item: any) => ({
+        id: item.id,
+        criteriaName: item.criteriaName,
+        maxMarks: item.maxMarks,
+        weight: item.weight,
+      }));
+
+      setRubric(transformedRubric);
+      toast.success("Rubric item removed");
+    } catch (err) {
+      console.error("Error removing rubric item:", err);
+      toast.error("Failed to remove rubric item");
+    }
   };
 
   const handlePublishResults = async () => {
@@ -231,8 +323,17 @@ export default function CoordinatorFinalEvalViva() {
 
     setPublishingResults(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/publish?coordinator_email=${encodeURIComponent(user?.email || "coordinator@system.local")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to publish results");
+      }
 
       setSelectedStudent((prev) =>
         prev
@@ -249,9 +350,104 @@ export default function CoordinatorFinalEvalViva() {
 
       toast.success("✅ Results published! Students can now view their final grades");
     } catch (err) {
+      console.error("Error publishing results:", err);
       toast.error("Failed to publish results");
     } finally {
       setPublishingResults(false);
+    }
+  };
+
+  const handleSubmitMarks = async (memberId: string) => {
+    if (!selectedStudent) return;
+
+    // Get marks from form inputs
+    const marksInput = document.getElementById(`${memberId}-marks`) as HTMLInputElement;
+    const feedbackInput = document.getElementById(`${memberId}-feedback`) as HTMLTextAreaElement;
+
+    if (!marksInput || !marksInput.value) {
+      toast.error("Please enter marks");
+      return;
+    }
+
+    const marksValue = parseFloat(marksInput.value);
+    if (isNaN(marksValue) || marksValue < 0 || marksValue > 100) {
+      toast.error("Marks must be between 0 and 100");
+      return;
+    }
+
+    setSubmittingMarks(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/committee/${memberId}/marks`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            marks: marksValue,
+            feedback: feedbackInput?.value || "",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to submit marks");
+      }
+
+      const data = await response.json();
+
+      setSelectedStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              marks: data.committee_marks || prev.marks,
+              weightedAverage: data.weighted_average,
+              calculatedFinalMarks: data.weighted_average,
+              status: data.status,
+            }
+          : null
+      );
+
+      toast.success(`✅ Marks submitted for committee member`);
+    } catch (err) {
+      console.error("Error submitting marks:", err);
+      toast.error("Failed to submit marks");
+    } finally {
+      setSubmittingMarks(false);
+    }
+  };
+
+  const handleApproveMarks = async () => {
+    if (!selectedStudent) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/final-evaluation/${selectedStudent.id}/approve?coordinator_email=${encodeURIComponent(user?.email || "coordinator@system.local")}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            approval_feedback: "",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to approve marks");
+      }
+
+      setSelectedStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              approvalStatus: "approved",
+            }
+          : null
+      );
+
+      toast.success("✅ Marks approved successfully");
+    } catch (err) {
+      console.error("Error approving marks:", err);
+      toast.error("Failed to approve marks");
     }
   };
 
@@ -705,26 +901,19 @@ export default function CoordinatorFinalEvalViva() {
                           <Separator className="mb-4" />
 
                           <div className="space-y-4">
-                            {rubric.map((criteria) => (
-                              <div key={criteria.id} className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label htmlFor={`${member.id}-${criteria.id}`} className="text-sm">
-                                    {criteria.criteriaName}
-                                  </Label>
-                                  <span className="text-xs text-gray-600">Max: {criteria.maxMarks}</span>
-                                </div>
-                                <Input
-                                  id={`${member.id}-${criteria.id}`}
-                                  type="number"
-                                  min="0"
-                                  max={criteria.maxMarks}
-                                  placeholder={`0 to ${criteria.maxMarks}`}
-                                  className="w-full"
-                                  defaultValue={selectedStudent.marks[member.id]?.marks || ""}
-                                  disabled={selectedStudent.status === "published"}
-                                />
-                              </div>
-                            ))}
+                            <div>
+                              <Label htmlFor={`${member.id}-marks`}>Total Marks (0-100)</Label>
+                              <Input
+                                id={`${member.id}-marks`}
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="Enter marks"
+                                className="w-full"
+                                defaultValue={selectedStudent.marks[member.id]?.marks || ""}
+                                disabled={selectedStudent.status === "published"}
+                              />
+                            </div>
 
                             <div>
                               <Label htmlFor={`${member.id}-feedback`}>Feedback</Label>
@@ -740,9 +929,7 @@ export default function CoordinatorFinalEvalViva() {
                             <Button
                               className="w-full"
                               disabled={selectedStudent.status === "published" || submittingMarks}
-                              onClick={() => {
-                                toast.success(`Marks saved for ${member.name}`);
-                              }}
+                              onClick={() => handleSubmitMarks(member.id)}
                             >
                               {selectedStudent.marks[member.id] ? "Update Marks" : "Submit Marks"}
                             </Button>
@@ -851,33 +1038,15 @@ export default function CoordinatorFinalEvalViva() {
                           {selectedStudent.status !== "published" && (
                             <div className="flex gap-3">
                               <Button
-                                onClick={() => {
-                                  setSelectedStudent((prev) =>
-                                    prev
-                                      ? {
-                                          ...prev,
-                                          approvalStatus: "approved",
-                                        }
-                                      : null
-                                  );
-                                  toast.success("Marks approved");
-                                }}
+                                onClick={handleApproveMarks}
                                 className="flex-1 bg-green-600 hover:bg-green-700"
-                                disabled={selectedStudent.approvalStatus === "approved"}
+                                disabled={selectedStudent.approvalStatus === "approved" || Object.keys(selectedStudent.marks).length === 0}
                               >
                                 <CheckCircle2 className="h-4 w-4 mr-2" />
                                 Approve Marks
                               </Button>
                               <Button
                                 onClick={() => {
-                                  setSelectedStudent((prev) =>
-                                    prev
-                                      ? {
-                                          ...prev,
-                                          approvalStatus: "rejected",
-                                        }
-                                      : null
-                                  );
                                   toast.error("Marks rejected - send back for revision");
                                 }}
                                 variant="destructive"
