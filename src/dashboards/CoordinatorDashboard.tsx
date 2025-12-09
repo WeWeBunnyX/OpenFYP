@@ -36,11 +36,6 @@ export default function CoordinatorDashboard({ onLogout }: { onLogout?: () => vo
             <main className="flex-1 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold">Coordinator Dashboard</h2>
-                    <div className="flex gap-2">
-                        <button className="btn" onClick={() => setView("proposal")}>Proposal Evaluation</button>
-                        <button className="btn" onClick={() => setView("registration")}>Open Registration</button>
-                        <button className="btn" onClick={() => setView("schedule")}>Scheduling</button>
-                    </div>
                 </div>
 
                 {view === "home" && <div className="w-full max-w-4xl">Coordinator dashboard (placeholder)</div>}
