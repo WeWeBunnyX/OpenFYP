@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-from .models import ProgressGrading, InterimScheduling, get_session, Session
+from .models import ProgressGrading, InterimScheduling, Registration, ProgressLog, get_session, Session
 
 router = APIRouter()
 
@@ -502,3 +502,97 @@ def update_interim_scheduling(
         "status": schedule.status,
         "createdAt": schedule.created_at.isoformat(),
     }
+
+
+@router.get("/api/interim-scheduling/supervisor/{supervisor_email}")
+def get_interim_scheduling_by_supervisor(
+    supervisor_email: str,
+    session: Session = Depends(get_session),
+):
+    """Fetch all students and their interim evaluations for a supervisor."""
+    # Get all registrations where this person is the supervisor
+    registrations = session.exec(
+        select(Registration).where(
+            Registration.supervisor == supervisor_email
+        )
+    ).all()
+    
+    if not registrations:
+        return []
+    
+    # For each student, fetch their interim scheduling and marks
+    students = []
+    for reg in registrations:
+        student_email = reg.owner
+        
+        # Get interim schedules for this student
+        schedules = session.exec(
+            select(InterimScheduling).where(
+                InterimScheduling.student_email == student_email
+            )
+        ).all()
+        
+        # Get progress log count for eligibility
+        progress_logs = session.exec(
+            select(ProgressLog).where(
+                ProgressLog.owner == student_email
+            )
+        ).all()
+        
+        logs_submitted = len(progress_logs)
+        
+        # Get supervisor evaluations completion status
+        supervisor_evals = session.exec(
+            select(ProgressGrading).where(
+                ProgressGrading.student_email == student_email,
+                ProgressGrading.supervisor_email == supervisor_email
+            )
+        ).all()
+        
+        supervisor_evals_complete = len(supervisor_evals) > 0
+        
+        # Build student data
+        student_data = {
+            "email": student_email,
+            "name": reg.owner,
+            "projectTitle": reg.title,
+            "registrationId": reg.id,
+            "logsSubmitted": logs_submitted,
+            "supervisorEvaluationsComplete": supervisor_evals_complete,
+            "eligibleForStage1": logs_submitted >= 12,
+            "eligibleForStage2": logs_submitted >= 24,
+            "interimStage1Status": "pending",
+            "interimStage1Schedule": None,
+            "interimStage2Status": "pending",
+            "interimStage2Schedule": None,
+        }
+        
+        # Assign schedules to stages
+        if len(schedules) > 0:
+            stage1_sched = schedules[0]
+            student_data["interimStage1Status"] = stage1_sched.status
+            student_data["interimStage1Schedule"] = {
+                "id": stage1_sched.id,
+                "start": stage1_sched.start.isoformat() if stage1_sched.start else None,
+                "end": stage1_sched.end.isoformat() if stage1_sched.end else None,
+                "slotMinutes": stage1_sched.slot_minutes,
+                "evaluators": stage1_sched.evaluators,
+                "status": stage1_sched.status,
+            }
+        
+        if len(schedules) > 1:
+            stage2_sched = schedules[1]
+            student_data["interimStage2Status"] = stage2_sched.status
+            student_data["interimStage2Schedule"] = {
+                "id": stage2_sched.id,
+                "start": stage2_sched.start.isoformat() if stage2_sched.start else None,
+                "end": stage2_sched.end.isoformat() if stage2_sched.end else None,
+                "slotMinutes": stage2_sched.slot_minutes,
+                "evaluators": stage2_sched.evaluators,
+                "status": stage2_sched.status,
+            }
+        
+        students.append(student_data)
+    
+    return students
+
