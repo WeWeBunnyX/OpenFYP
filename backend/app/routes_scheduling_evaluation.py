@@ -347,6 +347,24 @@ def patch_proposal_evaluation(pe_id: int, data: dict = Body(None), response: Res
     return {"message": "Saved", "proposal_evaluation": {"id": pe.id, "registration_id": pe.registration_id, "result": pe.result, "remarks": pe.remarks, "status": pe.status, "updated_at": pe.updated_at.isoformat() if pe.updated_at else None}}
 
 
+@router.delete("/proposal_evaluations/{pe_id}")
+def delete_proposal_evaluation(pe_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session=Depends(get_session)):
+    """Delete a proposal evaluation record (Coordinator only)."""
+    user = session.get(User, x_user_email)
+    if not user or user.role != "Coordinator":
+        response.status_code = status.HTTP_403_FORBIDDEN
+        return {"message": "Only coordinators can delete evaluation records"}
+
+    pe = session.get(ProposalEvaluation, pe_id)
+    if not pe:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {"message": "ProposalEvaluation not found"}
+
+    session.delete(pe)
+    session.commit()
+    return {"message": "Evaluation deleted successfully"}
+
+
 @router.delete("/schedules/{sched_id}")
 def delete_schedule(sched_id: int, response: Response, x_user_email: str = Header(None, alias="X-User-Email"), session=Depends(get_session)):
     user = session.get(User, x_user_email)

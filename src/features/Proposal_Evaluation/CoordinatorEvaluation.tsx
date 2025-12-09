@@ -5,6 +5,14 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/AuthContext"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 type Registration = {
     id: number
@@ -65,6 +73,9 @@ export default function CoordinatorEvaluation() {
         error?: string | null
         success?: string | null
     }>>({})
+    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+    const [deleteTargetId, setDeleteTargetId] = React.useState<number | null>(null)
+    const [deleting, setDeleting] = React.useState(false)
 
     React.useEffect(() => {
         fetchRegistrations()
@@ -122,6 +133,42 @@ export default function CoordinatorEvaluation() {
             console.error('Submit evaluation failed', err)
             updateDraft(id, { loading: false, error: 'Request failed' })
             toast.error('Save failed: request error')
+        }
+    }
+
+    const openDeleteDialog = (id: number) => {
+        setDeleteTargetId(id)
+        setDeleteDialogOpen(true)
+    }
+
+    const confirmDeleteEvaluation = async () => {
+        if (deleteTargetId === null) return
+        setDeleting(true)
+        try {
+            const resp = await fetch(`http://localhost:8000/proposal_evaluations/${deleteTargetId}`, {
+                method: 'DELETE',
+                headers: { 'X-User-Email': user?.email || '' }
+            })
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => null)
+                toast.error(`Delete failed: ${data?.message || resp.statusText}`)
+            } else {
+                toast.success('Evaluation deleted')
+                // Remove from local state immediately
+                setEvaluations(prev => prev.filter(e => e.id !== deleteTargetId))
+                setEvaluationDrafts(prev => {
+                    const copy = { ...prev }
+                    delete copy[deleteTargetId]
+                    return copy
+                })
+            }
+        } catch (err) {
+            console.error('Delete evaluation failed', err)
+            toast.error('Delete failed: request error')
+        } finally {
+            setDeleting(false)
+            setDeleteDialogOpen(false)
+            setDeleteTargetId(null)
         }
     }
 
@@ -513,7 +560,14 @@ export default function CoordinatorEvaluation() {
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold">Record / View Evaluations</h3>
                     <div>
-                        <Button size="sm" onClick={fetchEvaluations}>Refresh</Button>
+                        <Button size="sm" onClick={async () => {
+                            // Clear stale data first
+                            setEvaluations([]);
+                            setEvaluationDrafts({});
+                            // Fetch fresh data from database
+                            await Promise.all([fetchEvaluations(), fetchRegistrations()]);
+                            toast.success("Data refreshed");
+                        }}>Refresh</Button>
                     </div>
                 </div>
                 {evaluations.length === 0 ? (
@@ -559,6 +613,9 @@ export default function CoordinatorEvaluation() {
                                         <Button onClick={() => submitEvaluation(ev.id)} disabled={draft.loading}>
                                             {draft.loading ? 'Saving…' : (ev.status === 'evaluated' ? 'Update' : 'Save')}
                                         </Button>
+                                        <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(ev.id)}>
+                                            Delete
+                                        </Button>
                                         {draft.error && <div className="text-red-600 text-sm">{draft.error}</div>}
                                         {draft.success && <div className="text-green-600 text-sm">{draft.success}</div>}
                                     </div>
@@ -568,6 +625,26 @@ export default function CoordinatorEvaluation() {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Evaluation</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this evaluation? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDeleteEvaluation} disabled={deleting}>
+                            {deleting ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
