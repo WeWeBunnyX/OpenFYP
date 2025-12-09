@@ -1,5 +1,6 @@
 import React from "react"
 import AppSidebar from "@/components/Sidebar"
+import DashboardHome from "@/components/DashboardHome"
 import SupervisorPanel from "@/features/registration/SupervisorPanel"
 import SupervisorScheduling from "@/features/Scheduling/SupervisorScheduling"
 import SupervisorEvaluation from "@/features/Proposal_Evaluation/SupervisorEvaluation"
@@ -10,26 +11,24 @@ import SupervisorInterimEval from "@/features/Interim_Evaluation/SupervisorInter
 export default function SupervisorDashboard(props: { onLogout?: () => void }) {
   const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading" | "interim">("home")
 
+  const handleNavigate = (key: string) => {
+    if (key === "registration") setView("registration")
+    else if (key === "schedule") setView("schedule")
+    else if (key === "proposal") setView("proposal")
+    else if (key === "progress") setView("progress")
+    else if (key === "grading") setView("grading")
+    else if (key === "interim") setView("interim")
+    else setView("home")
+  }
+
   return (
     <div className="flex h-screen">
       <AppSidebar
         role="Supervisor"
-        onSelect={(key) => {
-          if (key === "registration") return setView("registration")
-          if (key === "schedule") return setView("schedule")
-          if (key === "proposal") return setView("proposal")
-          if (key === "progress") return setView("progress")
-          if (key === "grading") return setView("grading")
-          if (key === "interim") return setView("interim")
-          return setView("home")
-        }}
+        onSelect={handleNavigate}
       />
-      <main className="flex-1 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Supervisor Dashboard</h2>
-        </div>
-
-        {view === "home" && <div className="w-full max-w-4xl">Supervisor dashboard (placeholder)</div>}
+      <main className="flex-1 p-6 overflow-auto">
+        {view === "home" && <DashboardHome role="Supervisor" onNavigate={handleNavigate} />}
         {view === "registration" && <SupervisorPanel />}
         {view === "schedule" && <SupervisorScheduling />}
         {view === "proposal" && <SupervisorEvaluation />}
