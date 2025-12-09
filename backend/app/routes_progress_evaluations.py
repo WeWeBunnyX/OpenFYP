@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-from .models import ProgressGrading, get_session, Session
+from .models import ProgressGrading, InterimScheduling, get_session, Session
 
 router = APIRouter()
 
@@ -27,6 +27,22 @@ class EvaluationUpdate(BaseModel):
     criteria: Optional[List[dict]] = None
     overall_feedback: Optional[str] = None
     final_score: Optional[int] = None
+
+
+class InterimScheduleCreate(BaseModel):
+    """Request model for creating interim scheduling"""
+    student_email: str
+    start: datetime  # Scheduling date with time
+    slot_minutes: int  # Duration of the slot
+    notes: Optional[str] = None
+    evaluators: Optional[List[str]] = None
+
+
+class InterimScheduleUpdate(BaseModel):
+    """Request model for updating interim scheduling marks"""
+    marks: int
+    feedback: Optional[str] = None
+    evaluators: Optional[List[str]] = None
 
 
 @router.post("/api/evaluations")
@@ -320,3 +336,159 @@ def delete_evaluation(evaluation_id: int, session: Session = Depends(get_session
     session.commit()
 
     return {"message": "Evaluation deleted successfully"}
+
+
+# Interim Scheduling Endpoints
+
+@router.post("/api/interim-scheduling")
+def create_interim_scheduling(
+    schedule: InterimScheduleCreate,
+    session: Session = Depends(get_session),
+):
+    """
+    Create an interim scheduling for a student.
+    
+    Parameters:
+    - student_email: Email of the student
+    - start: Start datetime (date + time)
+    - slot_minutes: Duration of the evaluation slot in minutes
+    - notes: Optional notes for the scheduling
+    - evaluators: Optional list of evaluator emails
+    """
+    
+    # Validate student exists in evaluations
+    student_evals = session.exec(
+        select(ProgressGrading).where(
+            ProgressGrading.student_email == schedule.student_email
+        )
+    ).first()
+    
+    if not student_evals:
+        raise HTTPException(status_code=404, detail="Student has no evaluations found")
+    
+    # Calculate end time based on slot_minutes
+    end_time = datetime.fromtimestamp(
+        schedule.start.timestamp() + (schedule.slot_minutes * 60)
+    )
+    
+    # Create interim scheduling record
+    interim = InterimScheduling(
+        student_email=schedule.student_email,
+        start=schedule.start,
+        end=end_time,
+        slot_minutes=schedule.slot_minutes,
+        notes=schedule.notes,
+        evaluators=schedule.evaluators or [],
+        status="scheduled",
+    )
+    
+    session.add(interim)
+    session.commit()
+    session.refresh(interim)
+    
+    return {
+        "id": interim.id,
+        "studentEmail": interim.student_email,
+        "start": interim.start.isoformat(),
+        "end": interim.end.isoformat(),
+        "slotMinutes": interim.slot_minutes,
+        "notes": interim.notes,
+        "evaluators": interim.evaluators,
+        "status": interim.status,
+        "createdAt": interim.created_at.isoformat(),
+    }
+
+
+@router.get("/api/interim-scheduling")
+def get_all_interim_scheduling(session: Session = Depends(get_session)):
+    """Fetch all interim scheduling records."""
+    schedules = session.exec(select(InterimScheduling)).all()
+    
+    return [
+        {
+            "id": s.id,
+            "studentEmail": s.student_email,
+            "start": s.start.isoformat() if s.start else None,
+            "end": s.end.isoformat() if s.end else None,
+            "slotMinutes": s.slot_minutes,
+            "notes": s.notes,
+            "evaluators": s.evaluators,
+            "status": s.status,
+            "createdAt": s.created_at.isoformat(),
+        }
+        for s in schedules
+    ]
+
+
+@router.get("/api/interim-scheduling/{student_email}")
+def get_interim_scheduling_by_student(
+    student_email: str,
+    session: Session = Depends(get_session),
+):
+    """Fetch interim scheduling for a specific student."""
+    schedules = session.exec(
+        select(InterimScheduling).where(
+            InterimScheduling.student_email == student_email
+        )
+    ).all()
+    
+    if not schedules:
+        raise HTTPException(status_code=404, detail="No scheduling found for this student")
+    
+    return [
+        {
+            "id": s.id,
+            "studentEmail": s.student_email,
+            "start": s.start.isoformat() if s.start else None,
+            "end": s.end.isoformat() if s.end else None,
+            "slotMinutes": s.slot_minutes,
+            "notes": s.notes,
+            "evaluators": s.evaluators,
+            "status": s.status,
+            "createdAt": s.created_at.isoformat(),
+        }
+        for s in schedules
+    ]
+
+
+@router.patch("/api/interim-scheduling/{schedule_id}")
+def update_interim_scheduling(
+    schedule_id: int,
+    update: InterimScheduleUpdate,
+    session: Session = Depends(get_session),
+):
+    """
+    Update interim scheduling marks/feedback.
+    
+    Parameters:
+    - schedule_id: ID of the scheduling record
+    - marks: Marks awarded
+    - feedback: Optional feedback
+    - evaluators: Optional list of evaluator emails
+    """
+    
+    schedule = session.get(InterimScheduling, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Interim scheduling not found")
+    
+    schedule.status = "completed"
+    if update.evaluators:
+        schedule.evaluators = update.evaluators
+    if update.feedback:
+        schedule.notes = update.feedback
+    
+    session.add(schedule)
+    session.commit()
+    session.refresh(schedule)
+    
+    return {
+        "id": schedule.id,
+        "studentEmail": schedule.student_email,
+        "start": schedule.start.isoformat(),
+        "end": schedule.end.isoformat(),
+        "slotMinutes": schedule.slot_minutes,
+        "notes": schedule.notes,
+        "evaluators": schedule.evaluators,
+        "status": schedule.status,
+        "createdAt": schedule.created_at.isoformat(),
+    }

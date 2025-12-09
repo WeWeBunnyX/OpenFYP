@@ -61,6 +61,8 @@ export default function CoordinatorInterimEval() {
   const [showMarksDialog, setShowMarksDialog] = useState(false);
   const [selectedStage, setSelectedStage] = useState<1 | 2 | null>(null);
   const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("09:00");
+  const [slotMinutes, setSlotMinutes] = useState("60");
   const [marks, setMarks] = useState("");
   const [feedback, setFeedback] = useState("");
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -136,25 +138,37 @@ export default function CoordinatorInterimEval() {
   };
 
   const confirmSchedule = async () => {
-    if (!selectedStudent || !selectedStage || !scheduledDate) {
+    if (!selectedStudent || !selectedStage || !scheduledDate || !scheduledTime) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const slotMin = parseInt(slotMinutes) || 60;
+    if (slotMin <= 0 || slotMin > 480) {
+      toast.error("Slot duration must be between 1 and 480 minutes");
       return;
     }
 
     setSavingSchedule(true);
     try {
+      // Combine date and time into a datetime ISO string
+      const dateTimeStr = `${scheduledDate}T${scheduledTime}:00`;
+      const startDateTime = new Date(dateTimeStr);
+      
+      if (isNaN(startDateTime.getTime())) {
+        throw new Error("Invalid date/time format");
+      }
+
       // API call to save interim scheduling to database
       const response = await fetch("http://localhost:8000/api/interim-scheduling", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           student_email: selectedStudent.email,
-          student_name: selectedStudent.name,
-          stage: selectedStage,
-          scheduled_date: scheduledDate,
-          coordinator_email: user?.email || "",
-          coordinator_name: user?.name || "",
-          status: "scheduled",
+          start: startDateTime.toISOString(),
+          slot_minutes: slotMin,
+          notes: `Stage ${selectedStage} interim evaluation`,
+          evaluators: [user?.email || ""],
         }),
       });
 
@@ -163,7 +177,7 @@ export default function CoordinatorInterimEval() {
         throw new Error(errorData.detail || "Failed to schedule evaluation");
       }
 
-      toast.success(`✅ Interim Evaluation Stage ${selectedStage} scheduled for ${scheduledDate}`);
+      toast.success(`✅ Interim Evaluation Stage ${selectedStage} scheduled for ${scheduledDate} at ${scheduledTime} (${slotMin} mins)`);
       
       // Update local state
       setStudents(students.map(s => 
@@ -183,6 +197,8 @@ export default function CoordinatorInterimEval() {
 
       setShowScheduleDialog(false);
       setScheduledDate("");
+      setScheduledTime("09:00");
+      setSlotMinutes("60");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to schedule evaluation";
       console.error("Schedule error:", err);
@@ -213,18 +229,32 @@ export default function CoordinatorInterimEval() {
 
     setSavingMarks(true);
     try {
+      // Get the interim scheduling record ID first
+      const scheduleResponse = await fetch(
+        `http://localhost:8000/api/interim-scheduling/${selectedStudent.email}`
+      );
+      
+      if (!scheduleResponse.ok) {
+        throw new Error("Failed to find interim scheduling record");
+      }
+      
+      const schedules = await scheduleResponse.json();
+      
+      if (!Array.isArray(schedules) || schedules.length === 0) {
+        throw new Error("No interim scheduling found for this student");
+      }
+      
+      // Use the most recent schedule
+      const scheduleId = schedules[0].id;
+
       // API call to update interim scheduling with marks
-      const response = await fetch("http://localhost:8000/api/interim-scheduling/update-marks", {
+      const response = await fetch(`http://localhost:8000/api/interim-scheduling/${scheduleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          student_email: selectedStudent.email,
-          stage: selectedStage,
           marks: marksNum,
           feedback: feedback || null,
-          coordinator_email: user?.email || "",
-          coordinator_name: user?.name || "",
-          status: "completed",
+          evaluators: [user?.email || ""],
         }),
       });
 
@@ -532,7 +562,7 @@ export default function CoordinatorInterimEval() {
                       <DialogHeader>
                         <DialogTitle>Schedule Interim Evaluation - Stage 1</DialogTitle>
                         <DialogDescription>
-                          Set the date for the Stage 1 interim evaluation
+                          Set the date, time, and slot duration for the Stage 1 interim evaluation
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
@@ -543,6 +573,30 @@ export default function CoordinatorInterimEval() {
                             type="date"
                             value={scheduledDate}
                             onChange={(e) => setScheduledDate(e.target.value)}
+                            className="mt-1"
+                            disabled={savingSchedule}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="stage1-time">Start Time</Label>
+                          <Input
+                            id="stage1-time"
+                            type="time"
+                            value={scheduledTime}
+                            onChange={(e) => setScheduledTime(e.target.value)}
+                            className="mt-1"
+                            disabled={savingSchedule}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="stage1-slot">Slot Duration (minutes)</Label>
+                          <Input
+                            id="stage1-slot"
+                            type="number"
+                            min="1"
+                            max="480"
+                            value={slotMinutes}
+                            onChange={(e) => setSlotMinutes(e.target.value)}
                             className="mt-1"
                             disabled={savingSchedule}
                           />
@@ -706,7 +760,7 @@ export default function CoordinatorInterimEval() {
                       <DialogHeader>
                         <DialogTitle>Schedule Interim Evaluation - Stage 2</DialogTitle>
                         <DialogDescription>
-                          Set the date for the Stage 2 interim evaluation
+                          Set the date, time, and slot duration for the Stage 2 interim evaluation
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
@@ -717,6 +771,30 @@ export default function CoordinatorInterimEval() {
                             type="date"
                             value={scheduledDate}
                             onChange={(e) => setScheduledDate(e.target.value)}
+                            className="mt-1"
+                            disabled={savingSchedule}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="stage2-time">Start Time</Label>
+                          <Input
+                            id="stage2-time"
+                            type="time"
+                            value={scheduledTime}
+                            onChange={(e) => setScheduledTime(e.target.value)}
+                            className="mt-1"
+                            disabled={savingSchedule}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="stage2-slot">Slot Duration (minutes)</Label>
+                          <Input
+                            id="stage2-slot"
+                            type="number"
+                            min="1"
+                            max="480"
+                            value={slotMinutes}
+                            onChange={(e) => setSlotMinutes(e.target.value)}
                             className="mt-1"
                             disabled={savingSchedule}
                           />
