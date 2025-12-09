@@ -90,6 +90,13 @@ export default function CoordinatorFinalEvalViva() {
     fetchStudentsForFinalEval();
   }, []);
 
+  // Fetch full evaluation details when student is selected
+  useEffect(() => {
+    if (selectedStudent) {
+      fetchFullEvaluationDetails(selectedStudent.id);
+    }
+  }, [selectedStudent?.id]);
+
   const fetchStudentsForFinalEval = async () => {
     try {
       const response = await fetch("http://localhost:8000/api/final-evaluation/coordinator/students");
@@ -120,7 +127,39 @@ export default function CoordinatorFinalEvalViva() {
       toast.error("Failed to load students for final evaluation");
       setStudents([]);
     }
-  }
+  };
+
+  const fetchFullEvaluationDetails = async (evalId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/final-evaluation/${evalId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch evaluation details");
+      }
+      const data = await response.json();
+      
+      // Update selected student with full details
+      setSelectedStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              committee: data.committee_members || [],
+              marks: data.committee_marks || {},
+              weightedAverage: data.weighted_average,
+              approvalStatus: data.approval_status,
+              vivaDate: data.viva_date,
+              status: data.status,
+            }
+          : null
+      );
+      
+      // Update rubric if provided
+      if (data.grading_rubric && data.grading_rubric.length > 0) {
+        setRubric(data.grading_rubric);
+      }
+    } catch (err) {
+      console.error("Error fetching evaluation details:", err);
+    }
+  };
 
   const filteredStudents = students.filter(
     (s) =>
@@ -182,6 +221,7 @@ export default function CoordinatorFinalEvalViva() {
 
       const data = await response.json();
 
+      // Update selected student with the committee members from API response
       setSelectedStudent((prev) =>
         prev
           ? {
