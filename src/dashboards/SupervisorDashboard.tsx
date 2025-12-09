@@ -7,9 +7,10 @@ import SupervisorEvaluation from "@/features/Proposal_Evaluation/SupervisorEvalu
 import SupervisorProgressTracking from "@/features/ProgressTracking/SupervisorProgressTracking"
 import SupervisorEvalGrading from "@/features/EvaluationandGrading/SupervisorEvalGrading"
 import SupervisorInterimEval from "@/features/Interim_Evaluation/SupervisorInterimEval"
+import SupervisorFinalEvalViva from "@/features/FinalEvaluationandVivas/SupervisorFinalEvalViva"
 
 export default function SupervisorDashboard(props: { onLogout?: () => void }) {
-  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading" | "interim">("home")
+  const [view, setView] = React.useState<"home" | "registration" | "schedule" | "proposal" | "progress" | "grading" | "interim" | "final">("home")
 
   const handleNavigate = (key: string) => {
     if (key === "registration") setView("registration")
@@ -18,6 +19,7 @@ export default function SupervisorDashboard(props: { onLogout?: () => void }) {
     else if (key === "progress") setView("progress")
     else if (key === "grading") setView("grading")
     else if (key === "interim") setView("interim")
+    else if (key === "final") setView("final")
     else setView("home")
   }
 
@@ -35,6 +37,7 @@ export default function SupervisorDashboard(props: { onLogout?: () => void }) {
         {view === "progress" && <SupervisorProgressTracking />}
         {view === "grading" && <SupervisorEvalGrading />}
         {view === "interim" && <SupervisorInterimEval />}
+        {view === "final" && <SupervisorFinalEvalViva />}
       </main>
     </div>
   )
