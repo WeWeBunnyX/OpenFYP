@@ -7,6 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
 import {
   Calendar,
@@ -56,6 +64,10 @@ export default function CoordinatorScheduling() {
     const [interimSchedules, setInterimSchedules] = React.useState<InterimSchedule[]>([])
     const [loadingInterim, setLoadingInterim] = React.useState(false)
     const [deletingInterimId, setDeletingInterimId] = React.useState<number | null>(null)
+    const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+    const [deleteInterimDialogOpen, setDeleteInterimDialogOpen] = React.useState(false)
+    const [deleteTargetId, setDeleteTargetId] = React.useState<number | null>(null)
+    const [deleteInterimTargetId, setDeleteInterimTargetId] = React.useState<number | null>(null)
 
     const load = async () => {
         setLoading(true)
@@ -120,11 +132,17 @@ export default function CoordinatorScheduling() {
             toast.error("Only coordinators can delete schedules")
             return
         }
-        const ok = window.confirm("Delete this schedule? This will clear the assigned defense for the student.")
-        if (!ok) return
-        setDeletingId(id)
+        setDeleteTargetId(id)
+        setDeleteDialogOpen(true)
+    }
+
+    const confirmDeleteSchedule = async () => {
+        if (!deleteTargetId || !user) return
+
+        setDeletingId(deleteTargetId)
+        setDeleteDialogOpen(false)
         try {
-            const res = await fetch(`http://localhost:8000/schedules/${id}`, {
+            const res = await fetch(`http://localhost:8000/schedules/${deleteTargetId}`, {
                 method: "DELETE",
                 headers: { "X-User-Email": user.email || "" },
             })
@@ -144,6 +162,7 @@ export default function CoordinatorScheduling() {
             toast.error(`Delete failed: ${msg}`)
         } finally {
             setDeletingId(null)
+            setDeleteTargetId(null)
         }
     }
 
@@ -154,11 +173,17 @@ export default function CoordinatorScheduling() {
             toast.error("Only coordinators can delete interim schedules")
             return
         }
-        const ok = window.confirm("Delete this interim schedule?")
-        if (!ok) return
-        setDeletingInterimId(id)
+        setDeleteInterimTargetId(id)
+        setDeleteInterimDialogOpen(true)
+    }
+
+    const confirmDeleteInterim = async () => {
+        if (!deleteInterimTargetId || !user) return
+
+        setDeletingInterimId(deleteInterimTargetId)
+        setDeleteInterimDialogOpen(false)
         try {
-            const res = await fetch(`http://localhost:8000/interim_schedules/${id}`, {
+            const res = await fetch(`http://localhost:8000/interim_schedules/${deleteInterimTargetId}`, {
                 method: "DELETE",
                 headers: { "X-User-Email": user.email || "" },
             })
@@ -177,6 +202,7 @@ export default function CoordinatorScheduling() {
             toast.error(`Delete failed: ${msg}`)
         } finally {
             setDeletingInterimId(null)
+            setDeleteInterimTargetId(null)
         }
     }
 
@@ -204,6 +230,66 @@ export default function CoordinatorScheduling() {
 
     return (
         <div className="space-y-6">
+            {/* Delete Schedule Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5 text-destructive" />
+                            Delete Schedule
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this schedule? This will clear the assigned defense for the student.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmDeleteSchedule}
+                            disabled={deletingId !== null}
+                        >
+                            {deletingId !== null ? "Deleting..." : "Delete"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Interim Schedule Dialog */}
+            <Dialog open={deleteInterimDialogOpen} onOpenChange={setDeleteInterimDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5 text-destructive" />
+                            Delete Interim Schedule
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this interim evaluation schedule?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteInterimDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmDeleteInterim}
+                            disabled={deletingInterimId !== null}
+                        >
+                            {deletingInterimId !== null ? "Deleting..." : "Delete"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
