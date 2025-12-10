@@ -107,7 +107,26 @@ export default function StudentScheduling() {
 
     const formatDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return "-"
-        return new Date(dateStr).toLocaleString("en-US", {
+
+        // If the datetime string has no timezone info (local time), parse it carefully
+        // to avoid timezone conversion
+        let date: Date
+        if (dateStr.includes("Z") || dateStr.includes("+") || dateStr.includes("-")) {
+            // Has timezone info, use normally
+            date = new Date(dateStr)
+        } else {
+            // No timezone info, parse as local time
+            // Parse the string manually to avoid UTC conversion
+            const [datePart, timePart] = dateStr.split("T")
+            if (!datePart || !timePart) {
+                return dateStr
+            }
+            const [year, month, day] = datePart.split("-").map(Number)
+            const [hour, minute] = timePart.split(":").map(Number)
+            date = new Date(year, month - 1, day, hour, minute, 0, 0)
+        }
+
+        return date.toLocaleString("en-US", {
             month: "short",
             day: "numeric",
             year: "numeric",

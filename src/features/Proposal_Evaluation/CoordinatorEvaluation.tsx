@@ -246,8 +246,13 @@ export default function CoordinatorEvaluation() {
 
     const toIso = (localValue: string) => {
         if (!localValue) return ""
-        const d = new Date(localValue)
-        return d.toISOString()
+        // localValue is from datetime-local input (e.g., "2025-12-10T01:00")
+        // Just return it as-is without timezone conversion - the backend expects local time
+        // Add seconds if missing
+        if (localValue.length === 16) {
+            return localValue + ":00"
+        }
+        return localValue
     }
 
     const handleAssign = async (id: number) => {
