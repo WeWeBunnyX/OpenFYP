@@ -208,15 +208,37 @@ export default function SupervisorProgressTracking() {
                         <p className="text-sm text-muted-foreground">{log.description}</p>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                           {log.fileUrl && (
-                            <a
-                              href={`http://localhost:8000${log.fileUrl}`}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const fileUrl = log.fileUrl!.startsWith("http")
+                                    ? log.fileUrl!
+                                    : `http://localhost:8000${log.fileUrl}`;
+                                  const response = await fetch(fileUrl);
+                                  if (!response.ok) {
+                                    toast.error("Failed to download file");
+                                    return;
+                                  }
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement("a");
+                                  link.href = url;
+                                  link.download = `log-${log.slot}.pdf`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(url);
+                                } catch (error) {
+                                  console.error("Download error:", error);
+                                  toast.error("Failed to download file");
+                                }
+                              }}
                               className="flex items-center gap-1 text-blue-600 hover:underline"
                             >
                               <Download className="h-3 w-3" />
-                              View file
-                            </a>
+                              Download file
+                            </button>
                           )}
                           {log.submittedAt && (
                             <span>Submitted: {new Date(log.submittedAt).toLocaleDateString()}</span>

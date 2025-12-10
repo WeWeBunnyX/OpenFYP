@@ -33,7 +33,6 @@ import {
   GraduationCap,
   TrendingUp,
   ClipboardList,
-  ExternalLink,
   Award,
 } from "lucide-react";
 
@@ -212,15 +211,37 @@ function SlotForm({
             <div className="space-y-2">
               <Label className="text-sm">Attachment</Label>
               {isCompleted && existing?.fileUrl ? (
-                <a
-                  href={existing.fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:underline p-2 border rounded-md"
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const fileUrl = existing.fileUrl!.startsWith("http")
+                        ? existing.fileUrl!
+                        : `http://localhost:8000${existing.fileUrl}`;
+                      const response = await fetch(fileUrl);
+                      if (!response.ok) {
+                        toast.error("Failed to download file");
+                        return;
+                      }
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.download = `log-${existing.slot}.pdf`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      window.URL.revokeObjectURL(url);
+                    } catch (error) {
+                      console.error("Download error:", error);
+                      toast.error("Failed to download file");
+                    }
+                  }}
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:underline p-2 border rounded-md hover:bg-blue-50 transition-colors w-full"
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  View uploaded file
-                </a>
+                  <FileText className="h-4 w-4" />
+                  Download uploaded file
+                </button>
               ) : (
                 <div className="flex items-center gap-2">
                   <Input
