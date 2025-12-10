@@ -402,20 +402,18 @@ def submit_committee_marks(
         
         # Calculate weighted average if all committee members have submitted
         if len(final_eval.committee_marks) == len(final_eval.committee_members):
-            weighted_sum = 0
-            for rubric_item in final_eval.grading_rubric:
-                # Get average mark for this criteria from all committee members
-                criteria_marks = []
-                for member_marks in final_eval.committee_marks.values():
-                    # For simplicity, using overall marks; could be extended for per-criteria marks
-                    criteria_marks.append(member_marks["marks"])
-                
-                if criteria_marks:
-                    avg_mark = sum(criteria_marks) / len(criteria_marks)
-                    weighted_sum += avg_mark * rubric_item["weight"]
-            
-            final_eval.weighted_average = round(weighted_sum, 2)
-            
+            # Get all committee marks
+            all_marks = []
+            for member_marks in final_eval.committee_marks.values():
+                all_marks.append(member_marks["marks"])
+
+            # Calculate average of all committee marks
+            if all_marks:
+                weighted_average = sum(all_marks) / len(all_marks)
+                final_eval.weighted_average = round(weighted_average, 2)
+            else:
+                final_eval.weighted_average = 0
+
             # Calculate final grade
             if final_eval.weighted_average >= 80:
                 final_eval.final_grade = "A"
