@@ -78,6 +78,7 @@ export default function AppSidebar({ role = "Student" as Role, onSelect, }: { ro
                 {menu.slice(0, 4).map((m) => (
                   <SidebarMenuItem key={m.key}>
                     <SidebarMenuButton
+                      data-testid={m.key === "registration" ? "fyp-registration-menu" : undefined}
                       isActive={active === m.key}
                       onClick={() => {
                         setActive(m.key)

@@ -459,15 +459,15 @@ export default function StudentForm() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Project Title</Label>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter your project title" />
+                  <Input data-testid="project-title-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter your project title" />
                 </div>
                 <div className="space-y-2">
                   <Label>Supervisor Email</Label>
-                  <Input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} placeholder="supervisor@example.com" />
+                  <Input data-testid="supervisor-email-input" value={supervisor} onChange={(e) => setSupervisor(e.target.value)} placeholder="supervisor@example.com" />
                 </div>
                 <div className="space-y-2">
                   <Label>Abstract</Label>
-                  <Textarea value={abstract} onChange={(e) => setAbstract(e.target.value)} placeholder="Describe your project..." rows={4} />
+                  <Textarea data-testid="project-abstract-input" value={abstract} onChange={(e) => setAbstract(e.target.value)} placeholder="Describe your project..." rows={4} />
                 </div>
                 <div className="space-y-2">
                   <Label>Attachment (optional)</Label>
@@ -497,7 +497,7 @@ export default function StudentForm() {
                   setFileName(null)
                   setFileData(null)
                 }}>Cancel</Button>
-                <Button onClick={submit} disabled={loading} className="gap-2">
+                <Button data-testid="submit-registration-btn" onClick={submit} disabled={loading} className="gap-2">
                   <Send className="h-4 w-4" />
                   {loading ? "Submitting..." : "Submit Registration"}
                 </Button>
