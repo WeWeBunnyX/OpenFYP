@@ -220,10 +220,10 @@ Edit `docker-compose.yml` to customize:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Student | student@example.com | password |
-| Supervisor | supervisor@example.com | password |
-| Coordinator | coordinator@example.com | password |
-| Committee | committee@example.com | password |
+| Student | student@example.com | student |
+| Supervisor | supervisor@example.com | supervisor |
+| Coordinator | coordinator@example.com | coordinator |
+| Committee | committee@example.com | commitee |
 
 ### User Role Workflows
 
