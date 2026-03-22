@@ -34,19 +34,19 @@ function LoginForm() {
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" placeholder="test@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                        <Input id="email" data-testid="email-input" placeholder="test@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
-                        <Input type="password" id="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+                        <Input type="password" id="password" data-testid="password-input" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
                     </div>
 
-                    {message && <p className="text-center mt-2 text-red-600">{message}</p>}
+                    {message && <p className="text-center mt-2 text-red-600" data-testid="error-message">{message}</p>}
                 </CardContent>
 
                 <CardFooter>
-                    <Button className="w-full" onClick={submit}>
+                    <Button className="w-full" data-testid="login-btn" onClick={submit}>
                         Submit
                     </Button>
                 </CardFooter>
