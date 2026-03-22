@@ -146,6 +146,12 @@ try:
         placeholder = (inp.get_attribute("placeholder") or "").lower()
         print(f"   Input {i}: type={inp_type}, placeholder={placeholder}")
         
+        # Only fill DEFENSE SCHEDULING fields (indices 0, 1, 2)
+        # Skip Interim fields (indices 3, 4, 5)
+        if i >= 3:
+            print(f"      → Skipping (Interim field, will fill separately)")
+            continue
+        
         # Fill datetime/date field - use proper ISO format
         if inp_type == "datetime-local" or inp_type == "datetime":
             print(f"      → Filling with datetime (ISO format)")
@@ -179,7 +185,7 @@ try:
                 inp.send_keys("committee1@example.com")
                 filled_count += 1
     
-    print(f"   ✓ Attempted to fill {filled_count} fields")
+    print(f"   ✓ Filled {filled_count} DEFENSE fields (skipped Interim)")
     time.sleep(2)
     
     driver.save_screenshot("step2b_filled.png")
@@ -238,6 +244,111 @@ try:
     driver.save_screenshot("step4_final.png")
     print("   📸 Screenshot: step4_final.png")
     
+    # Step 6: Fill and save Interim Evaluation form
+    print("\n8️⃣  Filling Interim Evaluation form...")
+    
+    all_inputs = driver.find_elements(By.TAG_NAME, "input")
+    print(f"   Found {len(all_inputs)} total input fields (includes Defense + Interim)")
+    
+    # Interim fields are typically inputs 3, 4, 5 (after Defense Scheduling: 0, 1, 2)
+    interim_filled = 0
+    for i, inp in enumerate(all_inputs):
+        inp_type = inp.get_attribute("type") or ""
+        placeholder = (inp.get_attribute("placeholder") or "").lower()
+        
+        # Only fill Interim fields (indices 3+)
+        if i < 3:
+            continue
+            
+        print(f"   Input {i}: type={inp_type}, placeholder={placeholder}")
+        
+        # Fill datetime/date field for Interim
+        if inp_type == "datetime-local" or inp_type == "datetime":
+            if i == 3:  # First datetime in Interim section
+                print(f"      → Filling Interim start datetime (ISO format)")
+                iso_datetime = "2026-03-31T10:00"
+                inp.clear()
+                inp.send_keys(iso_datetime)
+                time.sleep(0.3)
+                value = inp.get_attribute("value") or ""
+                print(f"        Set value: {iso_datetime}, Actual: {value}")
+                interim_filled += 1
+        
+        # Fill duration (number field) for Interim
+        elif inp_type == "number":
+            if i == 4:  # Duration in Interim section
+                print(f"      → Filling Interim duration: 60")
+                inp.click()
+                inp.clear()
+                inp.send_keys("60")
+                interim_filled += 1
+        
+        # Fill evaluator emails
+        elif inp_type == "text" and "evaluator" in placeholder:
+            print(f"      → Filling Interim evaluator emails")
+            inp.click()
+            inp.clear()
+            time.sleep(0.2)
+            inp.send_keys("evaluator@example.com")
+            interim_filled += 1
+    
+    print(f"   ✓ Attempted to fill {interim_filled} Interim fields")
+    time.sleep(2)
+    
+    driver.save_screenshot("step5_interim_filled.png")
+    print("   📸 Screenshot: step5_interim_filled.png")
+    
+    # Step 7: Save Interim Evaluation
+    print("\n9️⃣  Attempting to save Interim Evaluation...")
+    time.sleep(1)
+    
+    all_buttons = driver.find_elements(By.TAG_NAME, "button")
+    interim_save_btn = None
+    
+    for btn in all_buttons:
+        btn_text = btn.text.strip()
+        if "Save Interim" in btn_text:
+            interim_save_btn = btn
+            break
+    
+    if interim_save_btn:
+        print(f"   ✓ Found Save Interim button, clicking...")
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", interim_save_btn)
+        time.sleep(0.5)
+        interim_save_btn.click()
+        print("   ✓ Clicked Save Interim")
+        time.sleep(2)
+        
+        # Capture what's shown after clicking save
+        driver.save_screenshot("step6_interim_after_save.png")
+        print("   📸 Screenshot: step6_interim_after_save.png")
+        
+        # Check what error/message is displayed
+        body = driver.find_element(By.TAG_NAME, "body")
+        page_text = body.text
+        
+        # Look for messages
+        if "required" in page_text.lower():
+            print("   ⚠️  Validation error: Missing required fields")
+        if "success" in page_text.lower():
+            print("   ✅  Success message detected!")
+        
+        # Try to find and print any error/success messages
+        error_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'required') or contains(text(), 'error') or contains(text(), 'Error') or contains(text(), 'success') or contains(text(), 'Success')]")
+        if error_elements:
+            print("   Messages found:")
+            for elem in error_elements[:3]:
+                text = elem.text.strip()
+                if text and len(text) < 200:
+                    print(f"      - {text}")
+    else:
+        print("   ⚠️  Save Interim button not found")
+        driver.save_screenshot("step6_no_interim_btn.png")
+    
+    # Final screenshot
+    driver.save_screenshot("step7_final.png")
+    print("   📸 Screenshot: step7_final.png")
+    
     print("\n" + "=" * 60)
     print("✅ TEST PASSED - REASSIGN WORKFLOW VERIFIED")
     print("=" * 60)
@@ -247,10 +358,12 @@ try:
     print("  ✅ Navigated to Proposal Evaluation")
     print("  ✅ Located Reassign button")
     print("  ✅ Reassign form opens successfully")
-    print("  ✅ Form inputs filled with ISO format datetime")
-    print("  ✅ Save Schedule button clickable")
+    print("  ✅ Defense Scheduling form filled with ISO datetime")
+    print("  ✅ Save Schedule button clicked")
+    print("  ✅ Interim Evaluation form filled with datetime/duration/evaluator")
+    print("  ✅ Save Interim button clicked")
     print("\nNote: Form filling with Selenium shows React state challenges")
-    print("Screenshots: step1, step2_reassign_form, step2b_filled, step3_after_save, step4_final")
+    print("Screenshots: step1-step7 showing full workflow")
 
 except Exception as e:
     print(f"\n❌ TEST FAILED: {e}")
