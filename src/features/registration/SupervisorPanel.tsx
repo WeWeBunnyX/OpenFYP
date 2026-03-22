@@ -265,6 +265,7 @@ export default function SupervisorPanel() {
           <div className="flex items-center gap-2 pt-2 border-t">
             <Button
               size="sm"
+              data-testid={`approve-btn-${r.id}`}
               onClick={() => tryAction(r, "approve")}
               disabled={r.status === "approved" || r.status === "registered" || r.status === "scheduled"}
               variant={r.status === "approved" || r.status === "registered" || r.status === "scheduled" ? "outline" : "default"}
@@ -275,6 +276,7 @@ export default function SupervisorPanel() {
             </Button>
             <Button
               size="sm"
+              data-testid={`reject-btn-${r.id}`}
               onClick={() => tryAction(r, "reject")}
               disabled={r.status === "rejected" || r.status === "registered" || r.status === "scheduled"}
               variant={r.status === "rejected" ? "outline" : (r.status === "registered" || r.status === "scheduled" ? "outline" : "destructive")}
@@ -416,6 +418,7 @@ export default function SupervisorPanel() {
               <Label>Remarks (optional)</Label>
               <Textarea
                 className="mt-1"
+                data-testid="action-remarks-input"
                 rows={4}
                 value={actionRemarks}
                 onChange={(e) => setActionRemarks(e.target.value)}
@@ -426,6 +429,7 @@ export default function SupervisorPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setActionOpen(false)}>Cancel</Button>
             <Button
+              data-testid="confirm-action-btn"
               onClick={confirmAction}
               variant={actionType === 'reject' ? 'destructive' : 'default'}
               className="gap-2"
