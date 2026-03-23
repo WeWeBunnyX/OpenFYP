@@ -11,12 +11,20 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
 import zipfile
+from pathlib import Path
 
 
 BASE_URL = "http://localhost:5173"
 STUDENT_EMAIL = "student@example.com"
 STUDENT_PASSWORD = "student"
 NUM_LOGS = 12
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 # Create ZIP files for upload
 def create_test_file(log_number):
@@ -346,7 +354,7 @@ try:
     print(f"   Interim Evaluation Check Complete")
     print("=" * 60)
     
-    driver.save_screenshot("test_interim_eval_eligibility_success.png")
+    driver.save_screenshot(snap("test_interim_eval_eligibility_success.png"))
     print("\n📸 Screenshot saved: test_interim_eval_eligibility_success.png")
 
 except Exception as e:
@@ -355,7 +363,7 @@ except Exception as e:
     print(f"   Current URL: {driver.current_url}")
     print(f"   Page title: {driver.title}")
     print(f"   Logs submitted so far: {logs_submitted}")
-    driver.save_screenshot("test_interim_eval_eligibility_error.png")
+    driver.save_screenshot(snap("test_interim_eval_eligibility_error.png"))
     print("   Error screenshot saved: test_interim_eval_eligibility_error.png")
 
 finally:

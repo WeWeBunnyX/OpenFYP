@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+from pathlib import Path
 
 BASE_URL = "http://localhost:5173"
 STUDENT_EMAIL = "student@example.com"
@@ -16,6 +17,13 @@ STUDENT_PASSWORD = "student"
 # New values to update
 UPDATED_TITLE = "Advanced AI Chatbot with Voice Recognition"
 UPDATED_ABSTRACT = "This project implements a conversational AI system with voice input/output capabilities using deep learning and NLP. It will support real-time voice processing and intelligent response generation."
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 20)
@@ -53,7 +61,7 @@ try:
     time.sleep(2)
     
     # Step 3: Take screenshot of initial state
-    driver.save_screenshot("step1_initial.png")
+    driver.save_screenshot(snap("step1_initial.png"))
     print("   📸 Screenshot: step1_initial.png")
     
     # Step 4: Find and click Edit button
@@ -80,7 +88,7 @@ try:
     print("   ✓ Edit button clicked")
     time.sleep(3)
     
-    driver.save_screenshot("step2_edit_dialog.png")
+    driver.save_screenshot(snap("step2_edit_dialog.png"))
     print("   📸 Screenshot: step2_edit_dialog.png")
     
     # Step 5: Edit title field
@@ -153,7 +161,7 @@ try:
     print(f"   ✓ Description updated (length: {len(UPDATED_ABSTRACT)} chars)")
     time.sleep(1)
     
-    driver.save_screenshot("step3_fields_updated.png")
+    driver.save_screenshot(snap("step3_fields_updated.png"))
     print("   📸 Screenshot: step3_fields_updated.png")
     
     # Step 7: Find and click Save button
@@ -179,7 +187,7 @@ try:
     print("   ✓ Save button clicked - submitting...")
     time.sleep(3)
     
-    driver.save_screenshot("step4_after_submit.png")
+    driver.save_screenshot(snap("step4_after_submit.png"))
     print("   📸 Screenshot: step4_after_submit.png")
     
     # Step 8: Verify no errors
@@ -217,7 +225,7 @@ try:
 except Exception as e:
     print(f"\n❌ TEST FAILED: {e}")
     try:
-        driver.save_screenshot("registration_error.png")
+        driver.save_screenshot(snap("registration_error.png"))
     except:
         pass
     import traceback

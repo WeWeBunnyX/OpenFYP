@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+from pathlib import Path
 
 
 BASE_URL = "http://localhost:5173"
@@ -16,6 +17,13 @@ STUDENT_PASSWORD = "student"
 SUPERVISOR_EMAIL = "supervisor@example.com"
 PROJECT_TITLE = "AI-Powered Chatbot System"
 PROJECT_ABSTRACT = "This project aims to build an intelligent chatbot using NLP and machine learning. The system will process user queries and provide relevant responses."
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 10)
@@ -94,12 +102,12 @@ try:
     print("✅ TEST PASSED - Registration flow completed!")
     print("=" * 60)
     
-    driver.save_screenshot("test_registration_success.png")
+    driver.save_screenshot(snap("test_registration_success.png"))
     print("\n📸 Screenshot saved: test_registration_success.png")
 
 except Exception as e:
     print(f"\n❌ TEST FAILED: {e}")
-    driver.save_screenshot("test_registration_error.png")
+    driver.save_screenshot(snap("test_registration_error.png"))
     print("📸 Error screenshot saved: test_registration_error.png")
 
 finally:

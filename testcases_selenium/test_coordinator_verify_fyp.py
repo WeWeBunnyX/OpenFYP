@@ -8,11 +8,19 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+from pathlib import Path
 
 
 BASE_URL = "http://localhost:5173"
 COORDINATOR_EMAIL = "coordinator@example.com"
 COORDINATOR_PASSWORD = "coordinator"
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 10)
@@ -118,7 +126,7 @@ try:
     print("✅ TEST PASSED - FYP marked as verified successfully!")
     print("=" * 60)
     
-    driver.save_screenshot("test_coordinator_verify_success.png")
+    driver.save_screenshot(snap("test_coordinator_verify_success.png"))
     print("\n📸 Screenshot saved: test_coordinator_verify_success.png")
 
 except Exception as e:
@@ -126,7 +134,7 @@ except Exception as e:
     print("\nDebugging info:")
     print(f"   Current URL: {driver.current_url}")
     print(f"   Page title: {driver.title}")
-    driver.save_screenshot("test_coordinator_verify_error.png")
+    driver.save_screenshot(snap("test_coordinator_verify_error.png"))
     print("   Error screenshot saved: test_coordinator_verify_error.png")
 
 finally:

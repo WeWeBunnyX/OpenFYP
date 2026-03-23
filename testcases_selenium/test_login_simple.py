@@ -6,8 +6,14 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from pathlib import Path
 
 BASE_URL = "http://localhost:5173"
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 10)
 

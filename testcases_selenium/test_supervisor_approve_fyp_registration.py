@@ -8,11 +8,19 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+from pathlib import Path
 
 BASE_URL = "http://localhost:5173"
 SUPERVISOR_EMAIL = "supervisor@example.com"
 SUPERVISOR_PASSWORD = "supervisor"  
 APPROVAL_REMARKS = "Great project proposal! Looking forward to your progress."
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 10)
@@ -87,7 +95,7 @@ try:
         print("=" * 60)
         print("\n📝 Note: All projects have already been approved.")
         print("   The approval workflow is accessible and functional.")
-        driver.save_screenshot("test_approval_no_pending.png")
+        driver.save_screenshot(snap("test_approval_no_pending.png"))
         print("📸 Screenshot saved: test_approval_no_pending.png")
         driver.quit()
         exit(0)
@@ -122,14 +130,14 @@ try:
         print("✅ TEST PASSED - Project approved successfully!")
         print("=" * 60)
         
-        driver.save_screenshot("test_approval_success.png")
+        driver.save_screenshot(snap("test_approval_success.png"))
         print("\n📸 Screenshot saved: test_approval_success.png")
 
 except Exception as e:
     print(f"\n❌ TEST FAILED: {e}")
     import traceback
     traceback.print_exc()
-    driver.save_screenshot("test_approval_error.png")
+    driver.save_screenshot(snap("test_approval_error.png"))
     print("📸 Error screenshot saved: test_approval_error.png")
 
 finally:

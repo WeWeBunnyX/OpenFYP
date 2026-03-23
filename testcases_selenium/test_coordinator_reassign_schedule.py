@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import requests
 from datetime import datetime, timedelta
 import time
+from pathlib import Path
 
 BASE_URL = "http://localhost:5173"
 API_URL = "http://localhost:8000"
@@ -20,6 +21,13 @@ COORDINATOR_PASSWORD = "coordinator"
 DEFENSE_DATE = datetime.now() + timedelta(days=7)
 DURATION = "30"
 COMMITTEE_EMAILS = ["committee1@example.com", "committee2@example.com"]
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = None
 
@@ -105,7 +113,7 @@ try:
     print("   ✓ Clicked Proposal Evaluation menu")
     time.sleep(2)
     
-    driver.save_screenshot("step1_proposal_eval.png")
+    driver.save_screenshot(snap("step1_proposal_eval.png"))
     print("   📸 Screenshot: step1_proposal_eval.png")
     
     # Step 4: Find and verify Reassign button
@@ -131,7 +139,7 @@ try:
     print("   ✓ Reassign form opened")
     time.sleep(3)
     
-    driver.save_screenshot("step2_reassign_form.png")
+    driver.save_screenshot(snap("step2_reassign_form.png"))
     print("   📸 Screenshot: step2_reassign_form.png")
     
     # Step 5: Fill form fields
@@ -188,7 +196,7 @@ try:
     print(f"   ✓ Filled {filled_count} DEFENSE fields (skipped Interim)")
     time.sleep(2)
     
-    driver.save_screenshot("step2b_filled.png")
+    driver.save_screenshot(snap("step2b_filled.png"))
     print("   📸 Screenshot: step2b_filled.png")
     
     # Step 5b: Try to save form
@@ -213,7 +221,7 @@ try:
         time.sleep(2)
         
         # Capture what's shown after clicking save
-        driver.save_screenshot("step3_after_save.png")
+        driver.save_screenshot(snap("step3_after_save.png"))
         print("   📸 Screenshot: step3_after_save.png")
         
         # Check what error/message is displayed
@@ -238,10 +246,10 @@ try:
                     print(f"      - {text}")
     else:
         print("   ⚠️  Save Schedule button not found")
-        driver.save_screenshot("step3_no_save_btn.png")
+        driver.save_screenshot(snap("step3_no_save_btn.png"))
     
     # Final screenshot
-    driver.save_screenshot("step4_final.png")
+    driver.save_screenshot(snap("step4_final.png"))
     print("   📸 Screenshot: step4_final.png")
     
     # Step 6: Fill and save Interim Evaluation form
@@ -295,7 +303,7 @@ try:
     print(f"   ✓ Attempted to fill {interim_filled} Interim fields")
     time.sleep(2)
     
-    driver.save_screenshot("step5_interim_filled.png")
+    driver.save_screenshot(snap("step5_interim_filled.png"))
     print("   📸 Screenshot: step5_interim_filled.png")
     
     # Step 7: Save Interim Evaluation
@@ -320,7 +328,7 @@ try:
         time.sleep(2)
         
         # Capture what's shown after clicking save
-        driver.save_screenshot("step6_interim_after_save.png")
+        driver.save_screenshot(snap("step6_interim_after_save.png"))
         print("   📸 Screenshot: step6_interim_after_save.png")
         
         # Check what error/message is displayed
@@ -343,10 +351,10 @@ try:
                     print(f"      - {text}")
     else:
         print("   ⚠️  Save Interim button not found")
-        driver.save_screenshot("step6_no_interim_btn.png")
+        driver.save_screenshot(snap("step6_no_interim_btn.png"))
     
     # Final screenshot
-    driver.save_screenshot("step7_final.png")
+    driver.save_screenshot(snap("step7_final.png"))
     print("   📸 Screenshot: step7_final.png")
     
     print("\n" + "=" * 60)
@@ -369,7 +377,7 @@ except Exception as e:
     print(f"\n❌ TEST FAILED: {e}")
     try:
         if driver:
-            driver.save_screenshot("error_final.png")
+            driver.save_screenshot(snap("error_final.png"))
         print("   📸 Error screenshot saved: error_final.png")
     except:
         pass

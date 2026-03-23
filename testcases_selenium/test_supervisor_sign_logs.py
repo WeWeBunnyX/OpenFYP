@@ -10,11 +10,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
+from pathlib import Path
 
 
 BASE_URL = "http://localhost:5173"
 SUPERVISOR_EMAIL = "supervisor@example.com"
 SUPERVISOR_PASSWORD = "supervisor"
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 driver = webdriver.Firefox()
 wait = WebDriverWait(driver, 10)
@@ -92,7 +100,7 @@ try:
     print("\n5️⃣  Looking for logs to sign...")
     try:
         # Save screenshot to see the actual page structure
-        driver.save_screenshot("supervisor_before_view_logs.png")
+        driver.save_screenshot(snap("supervisor_before_view_logs.png"))
         print("   📸 Saved screenshot: supervisor_before_view_logs.png")
         
         # Print page source to debug what elements are available
@@ -158,13 +166,13 @@ try:
         time.sleep(3)  # Wait longer for logs to load
         
         # Take screenshot after clicking
-        driver.save_screenshot("supervisor_after_view_logs.png")
+        driver.save_screenshot(snap("supervisor_after_view_logs.png"))
         print("   📸 Saved screenshot: supervisor_after_view_logs.png")
     
     except Exception as e:
         print(f"   ❌ Error finding/clicking logs: {e}")
         try:
-            driver.save_screenshot("supervisor_view_logs_error.png")
+            driver.save_screenshot(snap("supervisor_view_logs_error.png"))
         except:
             pass
         raise
@@ -179,7 +187,7 @@ try:
         time.sleep(2)
         
         # Take a screenshot to see the logs page
-        driver.save_screenshot("supervisor_logs_loaded.png")
+        driver.save_screenshot(snap("supervisor_logs_loaded.png"))
         print("   📸 Saved screenshot: supervisor_logs_loaded.png")
         
         # Get all buttons to understand the page structure
@@ -280,7 +288,7 @@ try:
             except Exception as e:
                 print(f"   ❌ Error on attempt {sign_attempt + 1}: {str(e)[:80]}")
                 try:
-                    driver.save_screenshot(f"supervisor_sign_error_{sign_attempt}.png")
+                    driver.save_screenshot(snap(f"supervisor_sign_error_{sign_attempt}.png"))
                 except:
                     pass
                 time.sleep(1)
@@ -295,7 +303,7 @@ try:
     
     print(f"\n7️⃣  Summary: {logs_signed} logs signed")
     
-    driver.save_screenshot("supervisor_sign_logs_final.png")
+    driver.save_screenshot(snap("supervisor_sign_logs_final.png"))
     print(f"   📸 Screenshot saved: supervisor_sign_logs_final.png")
     
     if logs_signed > 0:
@@ -313,7 +321,7 @@ except Exception as e:
     print(traceback.format_exc())
     
     try:
-        driver.save_screenshot("supervisor_sign_logs_error.png")
+        driver.save_screenshot(snap("supervisor_sign_logs_error.png"))
         print(f"\n   📸 Error screenshot saved: supervisor_sign_logs_error.png")
     except:
         pass

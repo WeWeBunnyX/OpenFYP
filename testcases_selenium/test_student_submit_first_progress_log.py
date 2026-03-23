@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
 import zipfile
+from pathlib import Path
 
 
 BASE_URL = "http://localhost:5173"
@@ -17,6 +18,13 @@ STUDENT_EMAIL = "student@example.com"
 STUDENT_PASSWORD = "student"
 LOG_TITLE = "Week 1-2 Progress Report"
 LOG_DESCRIPTION = "Completed initial project setup and requirements analysis. Set up development environment, reviewed project scope with supervisor, and created documentation. Team meetings held to align on objectives."
+
+SNAPSHOT_DIR = Path(__file__).resolve().parent / "snapshots" / Path(__file__).stem
+SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def snap(name: str) -> str:
+    return str(SNAPSHOT_DIR / name)
 
 # Create a test ZIP file for upload (supported format)
 TEST_FILE_PATH = "test_progress_log.zip"
@@ -243,7 +251,7 @@ try:
     print("✅ TEST PASSED - Progress log submission completed!")
     print("=" * 60)
     
-    driver.save_screenshot("test_progress_log_success.png")
+    driver.save_screenshot(snap("test_progress_log_success.png"))
     print("\n📸 Screenshot saved: test_progress_log_success.png")
 
 except Exception as e:
@@ -251,7 +259,7 @@ except Exception as e:
     print("\nDebugging info:")
     print(f"   Current URL: {driver.current_url}")
     print(f"   Page title: {driver.title}")
-    driver.save_screenshot("test_progress_log_error.png")
+    driver.save_screenshot(snap("test_progress_log_error.png"))
     print("   Error screenshot saved: test_progress_log_error.png")
 
 finally:
