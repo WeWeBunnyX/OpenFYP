@@ -2,9 +2,9 @@ name: Selenium Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM
 
